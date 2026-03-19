@@ -102,11 +102,35 @@
     const recentActivity = [];
 
     async function getCameras() {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) {
+            placeholder.innerHTML = `
+                <p>Camera API not available</p>
+                <p class="subtitle">Your browser doesn't support camera access or you're not using HTTPS</p>
+                <p class="subtitle">Use the Manual Upload option instead</p>
+            `;
+            toggleBtn.disabled = true;
+            cameraSelect.disabled = true;
+            return;
+        }
+
         try {
+            const tempStream = await navigator.mediaDevices.getUserMedia({ video: true });
+            tempStream.getTracks().forEach(track => track.stop());
+
             const devices = await navigator.mediaDevices.enumerateDevices();
             const videoDevices = devices.filter(d => d.kind === 'videoinput');
 
-            cameraSelect.innerHTML = '<option value="">Select Camera</option>';
+            if (videoDevices.length === 0) {
+                placeholder.innerHTML = `
+                    <p>No camera detected</p>
+                    <p class="subtitle">Connect a webcam or use Manual Upload below</p>
+                `;
+                toggleBtn.disabled = true;
+                cameraSelect.innerHTML = '<option value="">No cameras found</option>';
+                return;
+            }
+
+            cameraSelect.innerHTML = '';
             videoDevices.forEach((device, index) => {
                 const option = document.createElement('option');
                 option.value = device.deviceId;
@@ -114,25 +138,51 @@
                 cameraSelect.appendChild(option);
             });
 
-            if (videoDevices.length > 0) {
-                cameraSelect.value = videoDevices[0].deviceId;
-            }
+            cameraSelect.value = videoDevices[0].deviceId;
+            placeholder.innerHTML = `
+                <p>Camera ready</p>
+                <p class="subtitle">${videoDevices.length} camera(s) detected - Click "Start Camera"</p>
+            `;
         } catch (error) {
-            console.error('Error enumerating cameras:', error);
+            console.error('Error accessing cameras:', error);
+            let message = 'Camera access denied';
+            let subtitle = 'Please allow camera access in your browser settings';
+
+            if (error.name === 'NotFoundError' || error.name === 'DevicesNotFoundError') {
+                message = 'No camera found';
+                subtitle = 'Connect a webcam or use Manual Upload';
+            } else if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
+                message = 'Camera permission denied';
+                subtitle = 'Click the camera icon in your browser address bar to allow access';
+            } else if (error.name === 'NotReadableError') {
+                message = 'Camera is in use';
+                subtitle = 'Close other apps using the camera and try again';
+            }
+
+            placeholder.innerHTML = `
+                <p>${message}</p>
+                <p class="subtitle">${subtitle}</p>
+                <p class="subtitle">You can still use Manual Upload below</p>
+            `;
+            toggleBtn.disabled = true;
+            cameraSelect.disabled = true;
         }
     }
 
     async function startCamera() {
         const deviceId = cameraSelect.value;
         if (!deviceId) {
-            showToast('Please select a camera', 'warning');
+            showToast('No camera selected', 'warning');
             return;
         }
+
+        toggleBtn.disabled = true;
+        toggleBtn.textContent = 'Starting...';
 
         try {
             stream = await navigator.mediaDevices.getUserMedia({
                 video: {
-                    deviceId: { exact: deviceId },
+                    deviceId: deviceId,
                     width: { ideal: 640 },
                     height: { ideal: 480 }
                 }
@@ -142,10 +192,20 @@
             video.style.display = 'block';
             placeholder.style.display = 'none';
             toggleBtn.textContent = 'Stop Camera';
+            toggleBtn.disabled = false;
             captureBtn.disabled = false;
         } catch (error) {
             console.error('Error starting camera:', error);
-            showToast('Failed to start camera. Please check permissions.', 'error');
+            toggleBtn.textContent = 'Start Camera';
+            toggleBtn.disabled = false;
+
+            if (error.name === 'NotReadableError') {
+                showToast('Camera is being used by another application', 'error');
+            } else if (error.name === 'NotAllowedError') {
+                showToast('Camera permission was denied', 'error');
+            } else {
+                showToast('Failed to start camera: ' + error.message, 'error');
+            }
         }
     }
 
