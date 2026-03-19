@@ -188,62 +188,88 @@ async def register_face(
     db: Session = Depends(get_db),
     current_user: str = Depends(get_current_user)
 ):
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+    try:
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            return FaceRegistrationResult(
+                success=False,
+                message="User not found"
+            )
 
-    file_ext = Path(face_image.filename).suffix.lower()
-    if file_ext not in settings.ALLOWED_IMAGE_EXTENSIONS:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid file type. Allowed: {settings.ALLOWED_IMAGE_EXTENSIONS}"
+        if not face_image.filename:
+            return FaceRegistrationResult(
+                success=False,
+                message="No file provided"
+            )
+
+        file_ext = Path(face_image.filename).suffix.lower()
+        if file_ext not in settings.ALLOWED_IMAGE_EXTENSIONS:
+            return FaceRegistrationResult(
+                success=False,
+                message=f"Invalid file type. Allowed: {', '.join(settings.ALLOWED_IMAGE_EXTENSIONS)}"
+            )
+
+        image_data = await face_image.read()
+
+        if len(image_data) == 0:
+            return FaceRegistrationResult(
+                success=False,
+                message="Empty file provided"
+            )
+
+        face_service = get_face_service()
+
+        valid, message = face_service.validate_image(image_data)
+        if not valid:
+            return FaceRegistrationResult(success=False, message=message)
+
+        detected, num_faces, detect_message = face_service.detect_faces(image_data)
+        if not detected or num_faces != 1:
+            return FaceRegistrationResult(success=False, message=detect_message)
+
+        embedding, embed_message = face_service.extract_embedding(image_data)
+        if embedding is None:
+            return FaceRegistrationResult(success=False, message=embed_message)
+
+        settings.FACES_DIR.mkdir(parents=True, exist_ok=True)
+        image_filename = f"{user.id}{file_ext}"
+        image_path = settings.FACES_DIR / image_filename
+
+        if user.face_image_path and Path(user.face_image_path).exists():
+            Path(user.face_image_path).unlink()
+
+        with open(image_path, "wb") as f:
+            f.write(image_data)
+
+        user.face_embedding = embedding
+        user.face_image_path = str(image_path)
+        user.face_registered = True
+        db.commit()
+
+        audit_log = AuditLog(
+            admin_user=current_user,
+            action="register_face",
+            resource_type="user",
+            resource_id=user.id,
+            details={"employee_id": user.employee_id},
+            ip_address=get_client_ip(request)
         )
+        db.add(audit_log)
+        db.commit()
 
-    image_data = await face_image.read()
-
-    face_service = get_face_service()
-
-    valid, message = face_service.validate_image(image_data)
-    if not valid:
-        return FaceRegistrationResult(success=False, message=message)
-
-    detected, num_faces, detect_message = face_service.detect_faces(image_data)
-    if not detected or num_faces != 1:
-        return FaceRegistrationResult(success=False, message=detect_message)
-
-    embedding, embed_message = face_service.extract_embedding(image_data)
-    if embedding is None:
-        return FaceRegistrationResult(success=False, message=embed_message)
-
-    settings.FACES_DIR.mkdir(parents=True, exist_ok=True)
-    image_filename = f"{user.id}{file_ext}"
-    image_path = settings.FACES_DIR / image_filename
-
-    with open(image_path, "wb") as f:
-        f.write(image_data)
-
-    user.face_embedding = embedding
-    user.face_image_path = str(image_path)
-    user.face_registered = True
-    db.commit()
-
-    audit_log = AuditLog(
-        admin_user=current_user,
-        action="register_face",
-        resource_type="user",
-        resource_id=user.id,
-        details={"employee_id": user.employee_id},
-        ip_address=get_client_ip(request)
-    )
-    db.add(audit_log)
-    db.commit()
-
-    logger.info(f"Face registered for user: {user.employee_id}")
-    return FaceRegistrationResult(
-        success=True,
-        message="Face registered successfully",
-        user_id=user.id
-    )
+        logger.info(f"Face registered for user: {user.employee_id}")
+        return FaceRegistrationResult(
+            success=True,
+            message="Face registered successfully",
+            user_id=user.id
+        )
+    except Exception as e:
+        logger.error(f"Error registering face: {str(e)}")
+        db.rollback()
+        return FaceRegistrationResult(
+            success=False,
+            message=f"Error registering face: {str(e)}"
+        )
 
 
 @router.delete("/{user_id}/face")

@@ -7,18 +7,18 @@ function getAuthToken() {
 async function fetchAPI(url, options = {}) {
     const token = getAuthToken();
 
-    const defaultOptions = {
-        headers: {
-            'Content-Type': 'application/json',
-            ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-        }
+    const defaultHeaders = {
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {})
     };
 
+    if (options.body && typeof options.body === 'string') {
+        defaultHeaders['Content-Type'] = 'application/json';
+    }
+
     const mergedOptions = {
-        ...defaultOptions,
         ...options,
         headers: {
-            ...defaultOptions.headers,
+            ...defaultHeaders,
             ...(options.headers || {})
         }
     };
@@ -32,14 +32,30 @@ async function fetchAPI(url, options = {}) {
             throw new Error('Unauthorized');
         }
 
-        const data = await response.json();
-
-        if (!response.ok) {
-            throw new Error(data.detail || 'Request failed');
+        if (response.status === 204 || response.headers.get('content-length') === '0') {
+            return {};
         }
 
-        return data;
+        const contentType = response.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.detail || 'Request failed');
+            }
+
+            return data;
+        } else {
+            if (!response.ok) {
+                throw new Error('Request failed');
+            }
+            return {};
+        }
     } catch (error) {
+        if (error instanceof SyntaxError) {
+            console.error('JSON Parse Error:', error);
+            throw new Error('Invalid server response');
+        }
         console.error('API Error:', error);
         throw error;
     }

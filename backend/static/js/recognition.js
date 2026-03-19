@@ -140,7 +140,6 @@ async function startCamera() {
         monitorCameraConnection();
 
         showToast('Camera started - Automatic face recognition active', 'success');
-        showOverlay('Scanning for faces...', '', 'scanning');
     } catch (error) {
         console.error('Error starting camera:', error);
         toggleBtn.textContent = 'Start Camera';
