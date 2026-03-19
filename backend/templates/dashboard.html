@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Face Attendance System{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Dashboard</h1>
+    <p class="subtitle">Today's attendance overview</p>
+</div>
+
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-value" id="stat-total-users">-</div>
+        <div class="stat-label">Total Users</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value" id="stat-registered-faces">-</div>
+        <div class="stat-label">Registered Faces</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value" id="stat-today-attendance">-</div>
+        <div class="stat-label">Today's Attendance</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value" id="stat-today-timeouts">-</div>
+        <div class="stat-label">Checked Out</div>
+    </div>
+</div>
+
+<div class="dashboard-grid">
+    <div class="card">
+        <div class="card-header">
+            <h3>Today's Activity</h3>
+        </div>
+        <div class="card-body">
+            <div class="activity-stats">
+                <div class="activity-item">
+                    <span class="activity-label">Time-Ins</span>
+                    <span class="activity-value" id="stat-time-ins">-</span>
+                </div>
+                <div class="activity-item">
+                    <span class="activity-label">Time-Outs</span>
+                    <span class="activity-value" id="stat-time-outs">-</span>
+                </div>
+                <div class="activity-item">
+                    <span class="activity-label">Unrecognized</span>
+                    <span class="activity-value" id="stat-unrecognized">-</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header">
+            <h3>Quick Actions</h3>
+        </div>
+        <div class="card-body">
+            <div class="quick-actions">
+                <a href="/recognition" class="btn btn-primary">Start Recognition</a>
+                <a href="/users" class="btn btn-secondary">Manage Users</a>
+                <a href="/exports" class="btn btn-secondary">Export Data</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h3>Recent Attendance</h3>
+        <a href="/attendance" class="btn btn-small">View All</a>
+    </div>
+    <div class="card-body">
+        <table class="data-table" id="recent-attendance-table">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>ID</th>
+                    <th>Time In</th>
+                    <th>Time Out</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody id="recent-attendance-body">
+                <tr>
+                    <td colspan="5" class="loading">Loading...</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    async function loadDashboard() {
+        try {
+            const [userStats, attendanceStats, recentAttendance] = await Promise.all([
+                fetchAPI('/api/users/stats'),
+                fetchAPI('/api/attendance/stats'),
+                fetchAPI('/api/attendance/today')
+            ]);
+
+            document.getElementById('stat-total-users').textContent = userStats.total_users;
+            document.getElementById('stat-registered-faces').textContent = userStats.registered_faces;
+            document.getElementById('stat-today-attendance').textContent = attendanceStats.total;
+            document.getElementById('stat-today-timeouts').textContent = attendanceStats.time_outs;
+            document.getElementById('stat-time-ins').textContent = attendanceStats.time_ins;
+            document.getElementById('stat-time-outs').textContent = attendanceStats.time_outs;
+            document.getElementById('stat-unrecognized').textContent = attendanceStats.unrecognized;
+
+            const tbody = document.getElementById('recent-attendance-body');
+            if (recentAttendance.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" class="empty">No attendance records today</td></tr>';
+            } else {
+                tbody.innerHTML = recentAttendance.slice(0, 10).map(record => `
+                    <tr>
+                        <td>${record.name || 'Unknown'}</td>
+                        <td>${record.employee_id || '-'}</td>
+                        <td>${record.time_in ? formatTime(record.time_in) : '-'}</td>
+                        <td>${record.time_out ? formatTime(record.time_out) : '-'}</td>
+                        <td><span class="badge badge-${record.is_recognized ? 'success' : 'warning'}">${record.status}</span></td>
+                    </tr>
+                `).join('');
+            }
+        } catch (error) {
+            console.error('Error loading dashboard:', error);
+            showToast('Error loading dashboard data', 'error');
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', loadDashboard);
+    setInterval(loadDashboard, 30000);
+</script>
+{% endblock %}

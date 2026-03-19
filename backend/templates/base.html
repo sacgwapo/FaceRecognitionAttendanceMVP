@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Face Attendance System{% endblock %}</title>
+    <link rel="stylesheet" href="/static/css/styles.css">
+    {% block head %}{% endblock %}
+</head>
+<body>
+    <div class="app-container">
+        {% block nav %}
+        <nav class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <h2>Face Attendance</h2>
+            </div>
+            <ul class="nav-links">
+                <li><a href="/dashboard" class="nav-link" data-page="dashboard">Dashboard</a></li>
+                <li><a href="/recognition" class="nav-link" data-page="recognition">Recognition</a></li>
+                <li><a href="/users" class="nav-link" data-page="users">Users</a></li>
+                <li><a href="/attendance" class="nav-link" data-page="attendance">Attendance</a></li>
+                <li><a href="/exports" class="nav-link" data-page="exports">Exports</a></li>
+                <li><a href="/settings-page" class="nav-link" data-page="settings">Settings</a></li>
+            </ul>
+            <div class="sidebar-footer">
+                <button id="logout-btn" class="btn btn-secondary btn-block">Logout</button>
+            </div>
+        </nav>
+        {% endblock %}
+
+        <main class="main-content">
+            <header class="top-header">
+                <button class="menu-toggle" id="menu-toggle">Menu</button>
+                <div class="header-right">
+                    <span id="current-time"></span>
+                </div>
+            </header>
+
+            <div class="content">
+                {% block content %}{% endblock %}
+            </div>
+        </main>
+    </div>
+
+    <div id="toast-container"></div>
+
+    <script src="/static/js/app.js"></script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

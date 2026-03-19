@@ -1,0 +1,329 @@
+{% extends "base.html" %}
+
+{% block title %}Users - Face Attendance System{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>User Management</h1>
+    <button class="btn btn-primary" id="add-user-btn">Add User</button>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <div class="search-box">
+            <input type="text" id="user-search" placeholder="Search by name, ID, or department...">
+        </div>
+        <label class="checkbox-label">
+            <input type="checkbox" id="active-only"> Active only
+        </label>
+    </div>
+    <div class="card-body">
+        <table class="data-table" id="users-table">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Employee ID</th>
+                    <th>Department</th>
+                    <th>Face</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody id="users-body">
+                <tr>
+                    <td colspan="6" class="loading">Loading...</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="modal" id="user-modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3 id="modal-title">Add User</h3>
+            <button class="modal-close" id="close-modal">&times;</button>
+        </div>
+        <form id="user-form">
+            <input type="hidden" id="user-id">
+            <div class="form-group">
+                <label for="employee_id">Employee ID *</label>
+                <input type="text" id="employee_id" name="employee_id" required>
+            </div>
+            <div class="form-group">
+                <label for="name">Name *</label>
+                <input type="text" id="name" name="name" required>
+            </div>
+            <div class="form-group">
+                <label for="department">Department</label>
+                <input type="text" id="department" name="department">
+            </div>
+            <div class="form-group">
+                <label for="email">Email</label>
+                <input type="email" id="email" name="email">
+            </div>
+            <div class="form-group">
+                <label for="phone">Phone</label>
+                <input type="text" id="phone" name="phone">
+            </div>
+            <div class="form-group">
+                <label for="notes">Notes</label>
+                <textarea id="notes" name="notes" rows="3"></textarea>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" id="cancel-btn">Cancel</button>
+                <button type="submit" class="btn btn-primary">Save</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="modal" id="face-modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>Register Face</h3>
+            <button class="modal-close" id="close-face-modal">&times;</button>
+        </div>
+        <div class="modal-body">
+            <p id="face-user-name"></p>
+            <div class="form-group">
+                <label for="face-image">Select Face Image</label>
+                <input type="file" id="face-image" accept="image/*">
+            </div>
+            <div id="face-preview" class="face-preview"></div>
+            <div id="face-status" class="status-message"></div>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" id="cancel-face-btn">Cancel</button>
+            <button type="button" class="btn btn-primary" id="upload-face-btn" disabled>Upload Face</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let currentUserId = null;
+
+    async function loadUsers() {
+        const search = document.getElementById('user-search').value;
+        const activeOnly = document.getElementById('active-only').checked;
+
+        try {
+            let url = `/api/users?limit=100&active_only=${activeOnly}`;
+            if (search) url += `&search=${encodeURIComponent(search)}`;
+
+            const users = await fetchAPI(url);
+            const tbody = document.getElementById('users-body');
+
+            if (users.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" class="empty">No users found</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = users.map(user => `
+                <tr>
+                    <td>${user.name}</td>
+                    <td>${user.employee_id}</td>
+                    <td>${user.department || '-'}</td>
+                    <td>
+                        ${user.face_registered
+                            ? '<span class="badge badge-success">Registered</span>'
+                            : '<span class="badge badge-warning">Not Registered</span>'}
+                    </td>
+                    <td>
+                        <span class="badge badge-${user.is_active ? 'success' : 'secondary'}">
+                            ${user.is_active ? 'Active' : 'Inactive'}
+                        </span>
+                    </td>
+                    <td>
+                        <div class="action-buttons">
+                            <button class="btn btn-small btn-secondary" onclick="editUser('${user.id}')">Edit</button>
+                            ${!user.face_registered
+                                ? `<button class="btn btn-small btn-primary" onclick="registerFace('${user.id}', '${user.name}')">Add Face</button>`
+                                : `<button class="btn btn-small btn-warning" onclick="removeFace('${user.id}')">Remove Face</button>`}
+                            <button class="btn btn-small btn-danger" onclick="deleteUser('${user.id}', '${user.name}')">Delete</button>
+                        </div>
+                    </td>
+                </tr>
+            `).join('');
+        } catch (error) {
+            console.error('Error loading users:', error);
+            showToast('Error loading users', 'error');
+        }
+    }
+
+    function openModal(title = 'Add User') {
+        document.getElementById('modal-title').textContent = title;
+        document.getElementById('user-modal').classList.add('active');
+    }
+
+    function closeModal() {
+        document.getElementById('user-modal').classList.remove('active');
+        document.getElementById('user-form').reset();
+        document.getElementById('user-id').value = '';
+        document.getElementById('employee_id').disabled = false;
+    }
+
+    async function editUser(userId) {
+        try {
+            const user = await fetchAPI(`/api/users/${userId}`);
+            document.getElementById('user-id').value = user.id;
+            document.getElementById('employee_id').value = user.employee_id;
+            document.getElementById('employee_id').disabled = true;
+            document.getElementById('name').value = user.name;
+            document.getElementById('department').value = user.department || '';
+            document.getElementById('email').value = user.email || '';
+            document.getElementById('phone').value = user.phone || '';
+            document.getElementById('notes').value = user.notes || '';
+            openModal('Edit User');
+        } catch (error) {
+            showToast('Error loading user', 'error');
+        }
+    }
+
+    async function deleteUser(userId, name) {
+        if (!confirm(`Are you sure you want to delete "${name}"? This action cannot be undone.`)) {
+            return;
+        }
+
+        try {
+            await fetchAPI(`/api/users/${userId}`, { method: 'DELETE' });
+            showToast('User deleted successfully');
+            loadUsers();
+        } catch (error) {
+            showToast('Error deleting user', 'error');
+        }
+    }
+
+    function registerFace(userId, name) {
+        currentUserId = userId;
+        document.getElementById('face-user-name').textContent = `Registering face for: ${name}`;
+        document.getElementById('face-preview').innerHTML = '';
+        document.getElementById('face-status').innerHTML = '';
+        document.getElementById('face-image').value = '';
+        document.getElementById('upload-face-btn').disabled = true;
+        document.getElementById('face-modal').classList.add('active');
+    }
+
+    function closeFaceModal() {
+        document.getElementById('face-modal').classList.remove('active');
+        currentUserId = null;
+    }
+
+    async function removeFace(userId) {
+        if (!confirm('Are you sure you want to remove the registered face?')) {
+            return;
+        }
+
+        try {
+            await fetchAPI(`/api/users/${userId}/face`, { method: 'DELETE' });
+            showToast('Face removed successfully');
+            loadUsers();
+        } catch (error) {
+            showToast('Error removing face', 'error');
+        }
+    }
+
+    document.getElementById('face-image').addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                document.getElementById('face-preview').innerHTML = `<img src="${e.target.result}" alt="Preview">`;
+                document.getElementById('upload-face-btn').disabled = false;
+            };
+            reader.readAsDataURL(file);
+        }
+    });
+
+    document.getElementById('upload-face-btn').addEventListener('click', async function() {
+        const fileInput = document.getElementById('face-image');
+        const file = fileInput.files[0];
+        if (!file || !currentUserId) return;
+
+        const formData = new FormData();
+        formData.append('face_image', file);
+
+        const statusDiv = document.getElementById('face-status');
+        statusDiv.innerHTML = '<span class="loading">Processing...</span>';
+        this.disabled = true;
+
+        try {
+            const response = await fetch(`/api/users/${currentUserId}/register-face`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('access_token')}`
+                },
+                body: formData
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                statusDiv.innerHTML = '<span class="success">Face registered successfully!</span>';
+                showToast('Face registered successfully');
+                setTimeout(() => {
+                    closeFaceModal();
+                    loadUsers();
+                }, 1500);
+            } else {
+                statusDiv.innerHTML = `<span class="error">${result.message}</span>`;
+                this.disabled = false;
+            }
+        } catch (error) {
+            statusDiv.innerHTML = '<span class="error">Error registering face. Please try again.</span>';
+            this.disabled = false;
+        }
+    });
+
+    document.getElementById('user-form').addEventListener('submit', async function(e) {
+        e.preventDefault();
+
+        const userId = document.getElementById('user-id').value;
+        const data = {
+            employee_id: document.getElementById('employee_id').value,
+            name: document.getElementById('name').value,
+            department: document.getElementById('department').value || null,
+            email: document.getElementById('email').value || null,
+            phone: document.getElementById('phone').value || null,
+            notes: document.getElementById('notes').value || null
+        };
+
+        try {
+            if (userId) {
+                await fetchAPI(`/api/users/${userId}`, {
+                    method: 'PUT',
+                    body: JSON.stringify(data)
+                });
+                showToast('User updated successfully');
+            } else {
+                await fetchAPI('/api/users', {
+                    method: 'POST',
+                    body: JSON.stringify(data)
+                });
+                showToast('User created successfully');
+            }
+            closeModal();
+            loadUsers();
+        } catch (error) {
+            showToast(error.message || 'Error saving user', 'error');
+        }
+    });
+
+    document.getElementById('add-user-btn').addEventListener('click', () => openModal());
+    document.getElementById('close-modal').addEventListener('click', closeModal);
+    document.getElementById('cancel-btn').addEventListener('click', closeModal);
+    document.getElementById('close-face-modal').addEventListener('click', closeFaceModal);
+    document.getElementById('cancel-face-btn').addEventListener('click', closeFaceModal);
+
+    let searchTimeout;
+    document.getElementById('user-search').addEventListener('input', function() {
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(loadUsers, 300);
+    });
+    document.getElementById('active-only').addEventListener('change', loadUsers);
+
+    document.addEventListener('DOMContentLoaded', loadUsers);
+</script>
+{% endblock %}

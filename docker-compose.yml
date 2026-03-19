@@ -1,0 +1,46 @@
+version: '3.8'
+
+services:
+  face-attendance:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: face-attendance
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-8000}:8000"
+    volumes:
+      - face_db:/app/data/db
+      - face_images:/app/data/faces
+      - face_exports:/app/data/exports
+      - face_logs:/app/data/logs
+    environment:
+      - DATABASE_URL=sqlite:///./data/db/attendance.db
+      - SECRET_KEY=${SECRET_KEY:-change-this-to-a-secure-random-string}
+      - ADMIN_USERNAME=${ADMIN_USERNAME:-admin}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin123}
+      - FACE_MATCH_THRESHOLD=${FACE_MATCH_THRESHOLD:-0.6}
+      - DUPLICATE_ATTENDANCE_TIMEOUT_MINUTES=${DUPLICATE_TIMEOUT:-30}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - face-network
+
+volumes:
+  face_db:
+    driver: local
+  face_images:
+    driver: local
+  face_exports:
+    driver: local
+  face_logs:
+    driver: local
+
+networks:
+  face-network:
+    driver: bridge

@@ -1,0 +1,192 @@
+{% extends "base.html" %}
+
+{% block title %}Attendance - Face Attendance System{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Attendance Records</h1>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <div class="filters-row">
+            <div class="filter-group">
+                <label for="start-date">From</label>
+                <input type="date" id="start-date">
+            </div>
+            <div class="filter-group">
+                <label for="end-date">To</label>
+                <input type="date" id="end-date">
+            </div>
+            <div class="filter-group">
+                <label for="filter-name">Name</label>
+                <input type="text" id="filter-name" placeholder="Search name...">
+            </div>
+            <div class="filter-group">
+                <label for="filter-id">Employee ID</label>
+                <input type="text" id="filter-id" placeholder="Search ID...">
+            </div>
+            <div class="filter-group">
+                <label for="filter-status">Status</label>
+                <select id="filter-status">
+                    <option value="">All</option>
+                    <option value="present">Present</option>
+                    <option value="completed">Completed</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label class="checkbox-label">
+                    <input type="checkbox" id="include-unrecognized" checked> Include Unrecognized
+                </label>
+            </div>
+            <button class="btn btn-primary" id="filter-btn">Filter</button>
+            <button class="btn btn-secondary" id="reset-btn">Reset</button>
+        </div>
+    </div>
+    <div class="card-body">
+        <table class="data-table" id="attendance-table">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Employee ID</th>
+                    <th>Date</th>
+                    <th>Time In</th>
+                    <th>Time Out</th>
+                    <th>Confidence</th>
+                    <th>Status</th>
+                    <th>Notes</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody id="attendance-body">
+                <tr>
+                    <td colspan="9" class="loading">Loading...</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+    <div class="card-footer">
+        <div class="pagination">
+            <button class="btn btn-small" id="prev-page" disabled>Previous</button>
+            <span id="page-info">Page 1</span>
+            <button class="btn btn-small" id="next-page">Next</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let currentPage = 0;
+    const pageSize = 50;
+
+    function setDefaultDates() {
+        const today = new Date();
+        const thirtyDaysAgo = new Date(today);
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+        document.getElementById('start-date').value = thirtyDaysAgo.toISOString().split('T')[0];
+        document.getElementById('end-date').value = today.toISOString().split('T')[0];
+    }
+
+    async function loadAttendance() {
+        const startDate = document.getElementById('start-date').value;
+        const endDate = document.getElementById('end-date').value;
+        const name = document.getElementById('filter-name').value;
+        const employeeId = document.getElementById('filter-id').value;
+        const status = document.getElementById('filter-status').value;
+        const includeUnrecognized = document.getElementById('include-unrecognized').checked;
+
+        let url = `/api/attendance?limit=${pageSize}&offset=${currentPage * pageSize}`;
+        if (startDate) url += `&start_date=${startDate}`;
+        if (endDate) url += `&end_date=${endDate}`;
+        if (name) url += `&name=${encodeURIComponent(name)}`;
+        if (employeeId) url += `&employee_id=${encodeURIComponent(employeeId)}`;
+        if (status) url += `&status=${status}`;
+        url += `&include_unrecognized=${includeUnrecognized}`;
+
+        try {
+            const records = await fetchAPI(url);
+            const tbody = document.getElementById('attendance-body');
+
+            if (records.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="9" class="empty">No records found</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = records.map(record => `
+                <tr class="${!record.is_recognized ? 'unrecognized-row' : ''}">
+                    <td>${record.name || 'Unknown'}</td>
+                    <td>${record.employee_id || '-'}</td>
+                    <td>${record.date}</td>
+                    <td>${record.time_in ? formatTime(record.time_in) : '-'}</td>
+                    <td>${record.time_out ? formatTime(record.time_out) : '-'}</td>
+                    <td>${record.confidence_score ? (record.confidence_score * 100).toFixed(1) + '%' : '-'}</td>
+                    <td>
+                        <span class="badge badge-${record.is_recognized ? (record.status === 'completed' ? 'success' : 'info') : 'warning'}">
+                            ${record.is_recognized ? record.status : 'unrecognized'}
+                        </span>
+                    </td>
+                    <td class="notes-cell">${record.notes || '-'}</td>
+                    <td>
+                        <button class="btn btn-small btn-danger" onclick="deleteRecord('${record.id}')">Delete</button>
+                    </td>
+                </tr>
+            `).join('');
+
+            document.getElementById('page-info').textContent = `Page ${currentPage + 1}`;
+            document.getElementById('prev-page').disabled = currentPage === 0;
+            document.getElementById('next-page').disabled = records.length < pageSize;
+        } catch (error) {
+            console.error('Error loading attendance:', error);
+            showToast('Error loading attendance records', 'error');
+        }
+    }
+
+    async function deleteRecord(recordId) {
+        if (!confirm('Are you sure you want to delete this record?')) {
+            return;
+        }
+
+        try {
+            await fetchAPI(`/api/attendance/${recordId}`, { method: 'DELETE' });
+            showToast('Record deleted');
+            loadAttendance();
+        } catch (error) {
+            showToast('Error deleting record', 'error');
+        }
+    }
+
+    document.getElementById('filter-btn').addEventListener('click', () => {
+        currentPage = 0;
+        loadAttendance();
+    });
+
+    document.getElementById('reset-btn').addEventListener('click', () => {
+        currentPage = 0;
+        setDefaultDates();
+        document.getElementById('filter-name').value = '';
+        document.getElementById('filter-id').value = '';
+        document.getElementById('filter-status').value = '';
+        document.getElementById('include-unrecognized').checked = true;
+        loadAttendance();
+    });
+
+    document.getElementById('prev-page').addEventListener('click', () => {
+        if (currentPage > 0) {
+            currentPage--;
+            loadAttendance();
+        }
+    });
+
+    document.getElementById('next-page').addEventListener('click', () => {
+        currentPage++;
+        loadAttendance();
+    });
+
+    document.addEventListener('DOMContentLoaded', () => {
+        setDefaultDates();
+        loadAttendance();
+    });
+</script>
+{% endblock %}

@@ -1,0 +1,235 @@
+{% extends "base.html" %}
+
+{% block title %}Settings - Face Attendance System{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Settings</h1>
+    <p class="subtitle">System configuration and audit logs</p>
+</div>
+
+<div class="settings-grid">
+    <div class="card">
+        <div class="card-header">
+            <h3>Recognition Settings</h3>
+        </div>
+        <div class="card-body">
+            <form id="settings-form">
+                <div class="form-group">
+                    <label for="face-threshold">Face Match Threshold</label>
+                    <input type="range" id="face-threshold" min="0.3" max="0.9" step="0.05" value="0.6">
+                    <div class="range-display">
+                        <span>Less Strict</span>
+                        <span id="threshold-value">60%</span>
+                        <span>More Strict</span>
+                    </div>
+                    <p class="help-text">Higher values require closer matches. Recommended: 55-70%</p>
+                </div>
+
+                <div class="form-group">
+                    <label for="duplicate-timeout">Duplicate Entry Timeout (minutes)</label>
+                    <input type="number" id="duplicate-timeout" min="1" max="1440" value="30">
+                    <p class="help-text">Prevents duplicate entries within this time window</p>
+                </div>
+
+                <div class="form-group">
+                    <label for="camera-index">Default Camera Index</label>
+                    <input type="number" id="camera-index" min="0" max="10" value="0">
+                    <p class="help-text">Camera device index for recognition</p>
+                </div>
+
+                <button type="submit" class="btn btn-primary">Save Settings</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header">
+            <h3>System Information</h3>
+        </div>
+        <div class="card-body">
+            <div class="info-list" id="system-info">
+                <div class="info-item">
+                    <span class="info-label">Loading...</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header">
+            <h3>Data Storage Paths</h3>
+        </div>
+        <div class="card-body">
+            <div class="info-list">
+                <div class="info-item">
+                    <span class="info-label">Database</span>
+                    <code>/data/db/attendance.db</code>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Face Images</span>
+                    <code>/data/faces/</code>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Exports</span>
+                    <code>/data/exports/</code>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Logs</span>
+                    <code>/data/logs/</code>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card privacy-card">
+        <div class="card-header">
+            <h3>Privacy Notice</h3>
+        </div>
+        <div class="card-body">
+            <div class="privacy-content">
+                <p><strong>Biometric Data Processing</strong></p>
+                <p>This system processes facial biometric data. Ensure you have:</p>
+                <ul>
+                    <li>Obtained explicit consent from all registered users</li>
+                    <li>Informed users about data collection and storage</li>
+                    <li>Implemented data retention policies</li>
+                    <li>Complied with applicable privacy laws (GDPR, CCPA, etc.)</li>
+                </ul>
+                <p><strong>Data Storage</strong></p>
+                <p>All data is stored locally. No external cloud services are used. Face embeddings (128-dimensional vectors) are stored instead of raw facial images where possible.</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h3>Audit Logs</h3>
+        <button class="btn btn-small btn-secondary" id="refresh-logs">Refresh</button>
+    </div>
+    <div class="card-body">
+        <table class="data-table" id="audit-table">
+            <thead>
+                <tr>
+                    <th>Timestamp</th>
+                    <th>Admin</th>
+                    <th>Action</th>
+                    <th>Resource</th>
+                    <th>Details</th>
+                    <th>IP Address</th>
+                </tr>
+            </thead>
+            <tbody id="audit-body">
+                <tr>
+                    <td colspan="6" class="loading">Loading...</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const thresholdSlider = document.getElementById('face-threshold');
+    const thresholdValue = document.getElementById('threshold-value');
+
+    thresholdSlider.addEventListener('input', function() {
+        thresholdValue.textContent = Math.round(this.value * 100) + '%';
+    });
+
+    async function loadSettings() {
+        try {
+            const settings = await fetchAPI('/api/settings');
+
+            if (settings.face_match_threshold) {
+                thresholdSlider.value = settings.face_match_threshold;
+                thresholdValue.textContent = Math.round(settings.face_match_threshold * 100) + '%';
+            }
+            if (settings.duplicate_attendance_timeout_minutes) {
+                document.getElementById('duplicate-timeout').value = settings.duplicate_attendance_timeout_minutes;
+            }
+            if (settings.camera_index !== undefined) {
+                document.getElementById('camera-index').value = settings.camera_index;
+            }
+        } catch (error) {
+            console.error('Error loading settings:', error);
+        }
+    }
+
+    async function loadSystemInfo() {
+        try {
+            const info = await fetchAPI('/api/settings/info');
+            const container = document.getElementById('system-info');
+
+            container.innerHTML = `
+                <div class="info-item">
+                    <span class="info-label">Application</span>
+                    <span class="info-value">${info.app_name}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Version</span>
+                    <span class="info-value">${info.version}</span>
+                </div>
+            `;
+        } catch (error) {
+            console.error('Error loading system info:', error);
+        }
+    }
+
+    async function loadAuditLogs() {
+        try {
+            const logs = await fetchAPI('/api/settings/audit-logs?limit=50');
+            const tbody = document.getElementById('audit-body');
+
+            if (logs.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" class="empty">No audit logs</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = logs.map(log => `
+                <tr>
+                    <td>${formatDateTime(log.timestamp)}</td>
+                    <td>${log.admin_user}</td>
+                    <td><span class="badge badge-info">${log.action}</span></td>
+                    <td>${log.resource_type || '-'}</td>
+                    <td class="details-cell">${log.details ? JSON.stringify(log.details) : '-'}</td>
+                    <td>${log.ip_address || '-'}</td>
+                </tr>
+            `).join('');
+        } catch (error) {
+            console.error('Error loading audit logs:', error);
+        }
+    }
+
+    document.getElementById('settings-form').addEventListener('submit', async function(e) {
+        e.preventDefault();
+
+        const data = {
+            face_match_threshold: parseFloat(thresholdSlider.value),
+            duplicate_attendance_timeout_minutes: parseInt(document.getElementById('duplicate-timeout').value),
+            camera_index: parseInt(document.getElementById('camera-index').value)
+        };
+
+        try {
+            await fetchAPI('/api/settings', {
+                method: 'PUT',
+                body: JSON.stringify(data)
+            });
+            showToast('Settings saved successfully');
+            loadAuditLogs();
+        } catch (error) {
+            showToast('Error saving settings', 'error');
+        }
+    });
+
+    document.getElementById('refresh-logs').addEventListener('click', loadAuditLogs);
+
+    document.addEventListener('DOMContentLoaded', () => {
+        loadSettings();
+        loadSystemInfo();
+        loadAuditLogs();
+    });
+</script>
+{% endblock %}
