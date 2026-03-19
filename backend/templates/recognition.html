@@ -130,7 +130,8 @@
                 return;
             }
 
-            cameraSelect.innerHTML = '';
+            cameraSelect.innerHTML = '<option value="">Select Camera</option>';
+            console.log('Available cameras:', videoDevices.map((d, i) => ({ id: d.deviceId, label: d.label || `Camera ${i + 1}` })));
             videoDevices.forEach((device, index) => {
                 const option = document.createElement('option');
                 option.value = device.deviceId;
@@ -138,7 +139,9 @@
                 cameraSelect.appendChild(option);
             });
 
-            cameraSelect.value = videoDevices[0].deviceId;
+            if (videoDevices.length === 1) {
+                cameraSelect.value = videoDevices[0].deviceId;
+            }
             placeholder.innerHTML = `
                 <p>Camera ready</p>
                 <p class="subtitle">${videoDevices.length} camera(s) detected - Click "Start Camera"</p>
@@ -171,6 +174,13 @@
 
     async function startCamera() {
         const deviceId = cameraSelect.value;
+        const selectedOption = cameraSelect.options[cameraSelect.selectedIndex];
+        console.log('Selected camera:', { deviceId, text: selectedOption?.text, index: cameraSelect.selectedIndex });
+
+        if (!deviceId) {
+            showToast('Please select a camera from the dropdown', 'warning');
+            return;
+        }
 
         toggleBtn.disabled = true;
         toggleBtn.textContent = 'Starting...';
