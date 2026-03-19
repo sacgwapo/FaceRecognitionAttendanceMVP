@@ -11,7 +11,7 @@ from app.database import get_db
 from app.models import AttendanceRecord
 from app.schemas import AttendanceRecordResponse, AttendanceRecordUpdate
 from app.services.attendance_service import AttendanceService
-from app.utils.security import get_current_user
+from app.utils.security import get_current_user, require_role
 from app.utils.logging import get_logger
 
 router = APIRouter(prefix="/api/attendance", tags=["Attendance"])
@@ -29,7 +29,7 @@ async def list_attendance(
     limit: int = Query(100, ge=1, le=1000),
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
-    current_user: str = Depends(get_current_user)
+    current_user: dict = Depends(require_role("admin", "hr"))
 ):
     service = AttendanceService(db)
     records = service.get_attendance_records(
@@ -48,7 +48,7 @@ async def list_attendance(
 @router.get("/today", response_model=List[AttendanceRecordResponse])
 async def get_today_attendance(
     db: Session = Depends(get_db),
-    current_user: str = Depends(get_current_user)
+    current_user: dict = Depends(require_role("admin", "hr"))
 ):
     today = datetime.now().strftime("%Y-%m-%d")
     service = AttendanceService(db)
@@ -63,7 +63,7 @@ async def get_today_attendance(
 @router.get("/stats")
 async def get_attendance_stats(
     db: Session = Depends(get_db),
-    current_user: str = Depends(get_current_user)
+    current_user: dict = Depends(require_role("admin", "hr"))
 ):
     service = AttendanceService(db)
     return service.get_today_stats()
@@ -73,7 +73,7 @@ async def get_attendance_stats(
 async def get_attendance_record(
     record_id: str,
     db: Session = Depends(get_db),
-    current_user: str = Depends(get_current_user)
+    current_user: dict = Depends(require_role("admin", "hr"))
 ):
     record = db.query(AttendanceRecord).filter(AttendanceRecord.id == record_id).first()
     if not record:
@@ -86,7 +86,7 @@ async def update_attendance_record(
     record_id: str,
     update_data: AttendanceRecordUpdate,
     db: Session = Depends(get_db),
-    current_user: str = Depends(get_current_user)
+    current_user: dict = Depends(require_role("admin", "hr"))
 ):
     record = db.query(AttendanceRecord).filter(AttendanceRecord.id == record_id).first()
     if not record:
@@ -106,7 +106,7 @@ async def update_attendance_record(
 async def delete_attendance_record(
     record_id: str,
     db: Session = Depends(get_db),
-    current_user: str = Depends(get_current_user)
+    current_user: dict = Depends(require_role("admin", "hr"))
 ):
     record = db.query(AttendanceRecord).filter(AttendanceRecord.id == record_id).first()
     if not record:

@@ -10,7 +10,7 @@ from app.database import get_db
 from app.models import SystemSettings, AuditLog
 from app.schemas import SettingsUpdate, AuditLogResponse
 from app.config import get_settings
-from app.utils.security import get_current_user, get_client_ip
+from app.utils.security import get_current_user, get_client_ip, require_role
 from app.utils.logging import get_logger
 
 router = APIRouter(prefix="/api/settings", tags=["Settings"])
@@ -21,7 +21,7 @@ app_settings = get_settings()
 @router.get("")
 async def get_system_settings(
     db: Session = Depends(get_db),
-    current_user: str = Depends(get_current_user)
+    current_user: dict = Depends(require_role("admin", "hr"))
 ):
     settings_dict = {
         "face_match_threshold": app_settings.FACE_MATCH_THRESHOLD,
@@ -46,7 +46,7 @@ async def update_system_settings(
     request: Request,
     settings_update: SettingsUpdate,
     db: Session = Depends(get_db),
-    current_user: str = Depends(get_current_user)
+    current_user: dict = Depends(require_role("admin"))
 ):
     updated_fields = []
 
@@ -63,7 +63,7 @@ async def update_system_settings(
     db.commit()
 
     audit_log = AuditLog(
-        admin_user=current_user,
+        admin_user=current_user["username"],
         action="update_settings",
         resource_type="settings",
         details={"updated_fields": updated_fields},
@@ -81,7 +81,7 @@ async def get_audit_logs(
     limit: int = 100,
     offset: int = 0,
     db: Session = Depends(get_db),
-    current_user: str = Depends(get_current_user)
+    current_user: dict = Depends(require_role("admin", "hr"))
 ):
     logs = db.query(AuditLog).order_by(
         AuditLog.timestamp.desc()

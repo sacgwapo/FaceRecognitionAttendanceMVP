@@ -18,7 +18,7 @@ DATA STORAGE:
 """
 
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Depends
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -28,6 +28,7 @@ import os
 from app.config import get_settings, ensure_directories
 from app.database import init_db
 from app.utils.logging import setup_logging, get_logger
+from app.utils.security import get_current_user, require_role
 from app.routers import auth, users, attendance, recognition, export, settings, admin_users
 
 
@@ -92,42 +93,42 @@ async def login_page(request: Request):
 
 
 @app.get("/dashboard", response_class=HTMLResponse)
-async def dashboard_page(request: Request):
+async def dashboard_page(request: Request, current_user: dict = Depends(require_role("admin", "hr", "attendance"))):
     return templates.TemplateResponse("dashboard.html", {"request": request})
 
 
 @app.get("/users", response_class=HTMLResponse)
-async def users_page(request: Request):
+async def users_page(request: Request, current_user: dict = Depends(require_role("admin", "hr"))):
     return templates.TemplateResponse("users.html", {"request": request})
 
 
 @app.get("/attendance", response_class=HTMLResponse)
-async def attendance_page(request: Request):
+async def attendance_page(request: Request, current_user: dict = Depends(require_role("admin", "hr"))):
     return templates.TemplateResponse("attendance.html", {"request": request})
 
 
 @app.get("/recognition", response_class=HTMLResponse)
-async def recognition_page(request: Request):
+async def recognition_page(request: Request, current_user: dict = Depends(require_role("admin", "hr", "attendance"))):
     return templates.TemplateResponse("recognition.html", {"request": request})
 
 
 @app.get("/exports", response_class=HTMLResponse)
-async def exports_page(request: Request):
+async def exports_page(request: Request, current_user: dict = Depends(require_role("admin", "hr"))):
     return templates.TemplateResponse("exports.html", {"request": request})
 
 
 @app.get("/settings-page", response_class=HTMLResponse)
-async def settings_page(request: Request):
+async def settings_page(request: Request, current_user: dict = Depends(require_role("admin"))):
     return templates.TemplateResponse("settings.html", {"request": request})
 
 
 @app.get("/hr-dashboard", response_class=HTMLResponse)
-async def hr_dashboard_page(request: Request):
+async def hr_dashboard_page(request: Request, current_user: dict = Depends(require_role("admin", "hr"))):
     return templates.TemplateResponse("hr_dashboard.html", {"request": request})
 
 
 @app.get("/admin-accounts", response_class=HTMLResponse)
-async def admin_accounts_page(request: Request):
+async def admin_accounts_page(request: Request, current_user: dict = Depends(require_role("admin"))):
     return templates.TemplateResponse("admin_accounts.html", {"request": request})
 
 

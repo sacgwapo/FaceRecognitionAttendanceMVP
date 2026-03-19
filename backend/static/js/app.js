@@ -4,6 +4,14 @@ function getAuthToken() {
     return localStorage.getItem('access_token');
 }
 
+function getUserRole() {
+    return localStorage.getItem('user_role');
+}
+
+function setUserRole(role) {
+    localStorage.setItem('user_role', role);
+}
+
 async function fetchAPI(url, options = {}) {
     const token = getAuthToken();
 
@@ -150,8 +158,34 @@ function checkAuth() {
     return true;
 }
 
+function applyRoleBasedAccess() {
+    const role = getUserRole();
+    if (!role) return;
+
+    const menuItems = {
+        dashboard: ['admin', 'hr', 'attendance'],
+        recognition: ['admin', 'hr', 'attendance'],
+        users: ['admin', 'hr'],
+        attendance: ['admin', 'hr'],
+        exports: ['admin', 'hr'],
+        'settings-page': ['admin']
+    };
+
+    document.querySelectorAll('.nav-link').forEach(link => {
+        const page = link.getAttribute('data-page');
+        const allowedRoles = menuItems[page];
+
+        if (allowedRoles && !allowedRoles.includes(role)) {
+            link.parentElement.style.display = 'none';
+        } else if (allowedRoles) {
+            link.parentElement.style.display = 'block';
+        }
+    });
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     checkAuth();
+    applyRoleBasedAccess();
     setActiveNavLink();
     updateCurrentTime();
     setInterval(updateCurrentTime, 1000);
@@ -164,6 +198,7 @@ document.addEventListener('DOMContentLoaded', () => {
             } catch (e) {
             }
             localStorage.removeItem('access_token');
+            localStorage.removeItem('user_role');
             window.location.href = '/login';
         });
     }

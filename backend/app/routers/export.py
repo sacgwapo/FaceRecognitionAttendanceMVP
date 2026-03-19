@@ -13,7 +13,7 @@ from app.models import AuditLog
 from app.schemas import ExportRequest
 from app.services.attendance_service import AttendanceService
 from app.services.export_service import get_export_service
-from app.utils.security import get_current_user, get_client_ip
+from app.utils.security import get_current_user, get_client_ip, require_role
 from app.utils.logging import get_logger
 
 router = APIRouter(prefix="/api/export", tags=["Export"])
@@ -25,7 +25,7 @@ async def generate_export(
     request: Request,
     export_request: ExportRequest,
     db: Session = Depends(get_db),
-    current_user: str = Depends(get_current_user)
+    current_user: dict = Depends(require_role("admin", "hr"))
 ):
     attendance_service = AttendanceService(db)
     records = attendance_service.get_attendance_records(
@@ -58,7 +58,7 @@ async def generate_export(
         media_type = "text/csv"
 
     audit_log = AuditLog(
-        admin_user=current_user,
+        admin_user=current_user["username"],
         action="export_attendance",
         resource_type="export",
         details={
@@ -84,7 +84,7 @@ async def generate_export(
 
 @router.get("/list")
 async def list_exports(
-    current_user: str = Depends(get_current_user)
+    current_user: dict = Depends(require_role("admin", "hr"))
 ):
     export_service = get_export_service()
     exports = export_service.list_exports()
@@ -94,7 +94,7 @@ async def list_exports(
 @router.get("/download/{filename}")
 async def download_export(
     filename: str,
-    current_user: str = Depends(get_current_user)
+    current_user: dict = Depends(require_role("admin", "hr"))
 ):
     export_service = get_export_service()
     file_path = export_service.get_export_file(filename)
@@ -122,7 +122,7 @@ async def delete_export(
     request: Request,
     filename: str,
     db: Session = Depends(get_db),
-    current_user: str = Depends(get_current_user)
+    current_user: dict = Depends(require_role("admin", "hr"))
 ):
     export_service = get_export_service()
     success = export_service.delete_export(filename)
@@ -131,7 +131,7 @@ async def delete_export(
         raise HTTPException(status_code=404, detail="Export file not found")
 
     audit_log = AuditLog(
-        admin_user=current_user,
+        admin_user=current_user["username"],
         action="delete_export",
         resource_type="export",
         details={"filename": filename},

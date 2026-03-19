@@ -13,7 +13,7 @@ from app.database import get_db
 from app.models import User, AuditLog
 from app.schemas import UserCreate, UserUpdate, UserResponse, FaceRegistrationResult
 from app.services.face_recognition_service import get_face_service
-from app.utils.security import get_current_user, get_client_ip
+from app.utils.security import get_current_user, get_client_ip, require_role
 from app.utils.logging import get_logger
 from app.config import get_settings
 
@@ -29,7 +29,7 @@ async def list_users(
     search: Optional[str] = None,
     active_only: bool = False,
     db: Session = Depends(get_db),
-    current_user: str = Depends(get_current_user)
+    current_user: dict = Depends(require_role("admin", "hr"))
 ):
     query = db.query(User)
 
@@ -50,7 +50,7 @@ async def list_users(
 @router.get("/stats")
 async def get_user_stats(
     db: Session = Depends(get_db),
-    current_user: str = Depends(get_current_user)
+    current_user: dict = Depends(require_role("admin", "hr"))
 ):
     total = db.query(func.count(User.id)).scalar()
     active = db.query(func.count(User.id)).filter(User.is_active == True).scalar()
@@ -67,7 +67,7 @@ async def get_user_stats(
 async def get_user(
     user_id: str,
     db: Session = Depends(get_db),
-    current_user: str = Depends(get_current_user)
+    current_user: dict = Depends(require_role("admin", "hr"))
 ):
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
@@ -80,7 +80,7 @@ async def create_user(
     request: Request,
     user_data: UserCreate,
     db: Session = Depends(get_db),
-    current_user: str = Depends(get_current_user)
+    current_user: dict = Depends(require_role("admin"))
 ):
     existing = db.query(User).filter(User.employee_id == user_data.employee_id).first()
     if existing:
@@ -95,7 +95,7 @@ async def create_user(
     db.refresh(user)
 
     audit_log = AuditLog(
-        admin_user=current_user,
+        admin_user=current_user["username"],
         action="create_user",
         resource_type="user",
         resource_id=user.id,
@@ -115,7 +115,7 @@ async def update_user(
     user_id: str,
     user_data: UserUpdate,
     db: Session = Depends(get_db),
-    current_user: str = Depends(get_current_user)
+    current_user: dict = Depends(require_role("admin"))
 ):
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
@@ -129,7 +129,7 @@ async def update_user(
     db.refresh(user)
 
     audit_log = AuditLog(
-        admin_user=current_user,
+        admin_user=current_user["username"],
         action="update_user",
         resource_type="user",
         resource_id=user.id,
@@ -148,7 +148,7 @@ async def delete_user(
     request: Request,
     user_id: str,
     db: Session = Depends(get_db),
-    current_user: str = Depends(get_current_user)
+    current_user: dict = Depends(require_role("admin"))
 ):
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
@@ -166,7 +166,7 @@ async def delete_user(
     db.commit()
 
     audit_log = AuditLog(
-        admin_user=current_user,
+        admin_user=current_user["username"],
         action="delete_user",
         resource_type="user",
         resource_id=user_id,
@@ -186,7 +186,7 @@ async def register_face(
     user_id: str,
     face_image: UploadFile = File(...),
     db: Session = Depends(get_db),
-    current_user: str = Depends(get_current_user)
+    current_user: dict = Depends(require_role("admin"))
 ):
     try:
         user = db.query(User).filter(User.id == user_id).first()
@@ -247,7 +247,7 @@ async def register_face(
         db.commit()
 
         audit_log = AuditLog(
-            admin_user=current_user,
+            admin_user=current_user["username"],
             action="register_face",
             resource_type="user",
             resource_id=user.id,
@@ -277,7 +277,7 @@ async def remove_face(
     request: Request,
     user_id: str,
     db: Session = Depends(get_db),
-    current_user: str = Depends(get_current_user)
+    current_user: dict = Depends(require_role("admin"))
 ):
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
@@ -294,7 +294,7 @@ async def remove_face(
     db.commit()
 
     audit_log = AuditLog(
-        admin_user=current_user,
+        admin_user=current_user["username"],
         action="remove_face",
         resource_type="user",
         resource_id=user.id,
