@@ -1,8 +1,5 @@
 let stream = null;
-let recognitionInterval = null;
-let lastRecognitionTime = 0;
 let reconnectAttempts = 0;
-let livenessCheckActive = false;
 let isProcessing = false;
 
 const video = document.getElementById('video');
@@ -10,15 +7,15 @@ const canvas = document.getElementById('canvas');
 const placeholder = document.getElementById('video-placeholder');
 const toggleBtn = document.getElementById('toggle-camera');
 const cameraSelect = document.getElementById('camera-select');
+const captureBtn = document.getElementById('capture-btn');
 const overlay = document.getElementById('recognition-overlay');
 const overlayIcon = document.getElementById('overlay-icon');
 const overlayMessage = document.getElementById('overlay-message');
 const overlayDetails = document.getElementById('overlay-details');
 const livenessIndicator = document.getElementById('liveness-indicator');
 
-const RECOGNITION_INTERVAL = 2000;
 const MAX_RECONNECT_ATTEMPTS = 5;
-const LIVENESS_CHECK_ENABLED = true;
+const LIVENESS_CHECK_ENABLED = false;
 
 async function getCameras() {
     if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) {
@@ -134,12 +131,12 @@ async function startCamera() {
         placeholder.style.display = 'none';
         toggleBtn.textContent = 'Stop Camera';
         toggleBtn.disabled = false;
+        captureBtn.disabled = false;
 
         reconnectAttempts = 0;
-        startAutoRecognition();
         monitorCameraConnection();
 
-        showToast('Camera started - Automatic face recognition active', 'success');
+        showToast('Camera started - Click "Capture & Recognize" when ready', 'success');
     } catch (error) {
         console.error('Error starting camera:', error);
         toggleBtn.textContent = 'Start Camera';
@@ -174,7 +171,7 @@ async function tryBasicCamera() {
         video.style.display = 'block';
         placeholder.style.display = 'none';
         toggleBtn.textContent = 'Stop Camera';
-        startAutoRecognition();
+        captureBtn.disabled = false;
         showToast('Camera started in basic mode', 'success');
     } catch (e) {
         showPlaceholder('Could not start camera', e.message);
@@ -183,11 +180,6 @@ async function tryBasicCamera() {
 }
 
 function stopCamera() {
-    if (recognitionInterval) {
-        clearInterval(recognitionInterval);
-        recognitionInterval = null;
-    }
-
     if (stream) {
         stream.getTracks().forEach(track => track.stop());
         stream = null;
@@ -199,28 +191,20 @@ function stopCamera() {
     overlay.style.display = 'none';
     livenessIndicator.style.display = 'none';
     toggleBtn.textContent = 'Start Camera';
+    captureBtn.disabled = true;
 
     showPlaceholder('Camera Stopped', 'Click "Start Camera" to resume');
 }
 
-function startAutoRecognition() {
-    if (recognitionInterval) {
-        clearInterval(recognitionInterval);
+async function performRecognition() {
+    if (!stream || isProcessing) {
+        showToast('Please wait, processing...', 'warning');
+        return;
     }
 
-    recognitionInterval = setInterval(async () => {
-        const now = Date.now();
-        if (now - lastRecognitionTime >= RECOGNITION_INTERVAL && !isProcessing) {
-            await performRecognition();
-        }
-    }, RECOGNITION_INTERVAL);
-}
-
-async function performRecognition() {
-    if (!stream || isProcessing) return;
-
     isProcessing = true;
-    lastRecognitionTime = Date.now();
+    captureBtn.disabled = true;
+    captureBtn.textContent = 'Processing...';
 
     try {
         if (LIVENESS_CHECK_ENABLED) {
@@ -260,6 +244,14 @@ async function performRecognition() {
         showOverlay('Recognition failed', 'Please try again', 'error');
     } finally {
         isProcessing = false;
+        captureBtn.disabled = false;
+        captureBtn.innerHTML = `
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"></circle>
+                <circle cx="12" cy="12" r="3"></circle>
+            </svg>
+            Capture & Recognize
+        `;
     }
 }
 
@@ -437,6 +429,10 @@ toggleBtn.addEventListener('click', () => {
     } else {
         startCamera();
     }
+});
+
+captureBtn.addEventListener('click', () => {
+    performRecognition();
 });
 
 document.addEventListener('DOMContentLoaded', () => {
