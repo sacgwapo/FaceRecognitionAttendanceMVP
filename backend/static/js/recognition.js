@@ -319,6 +319,7 @@ function displayRecognitionResult(result, action) {
             'success'
         );
         showToast(`${result.name} - ${actionLabel} recorded`, 'success');
+        captureScreenshot(result, action, confidence);
     } else {
         const confidence = (result.confidence * 100).toFixed(1);
         showOverlay(
@@ -327,11 +328,49 @@ function displayRecognitionResult(result, action) {
             'error'
         );
         showToast('Face not recognized', 'error');
+        captureScreenshot(result, action, confidence);
     }
 
     setTimeout(() => {
         hideOverlay();
     }, 4000);
+}
+
+function captureScreenshot(result, action, confidence) {
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(video, 0, 0);
+
+    const screenshotUrl = canvas.toDataURL('image/jpeg', 0.85);
+
+    const screenshotDisplay = document.getElementById('screenshot-display');
+    const captureTime = document.getElementById('capture-time');
+    const captureInfo = document.getElementById('capture-info');
+    const captureName = document.getElementById('capture-name');
+    const captureEmployeeId = document.getElementById('capture-employee-id');
+    const captureAction = document.getElementById('capture-action');
+    const captureConfidence = document.getElementById('capture-confidence');
+
+    screenshotDisplay.innerHTML = `<img src="${screenshotUrl}" alt="Captured Face">`;
+
+    const now = new Date();
+    captureTime.textContent = now.toLocaleTimeString('en-US', {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false
+    });
+
+    const actionLabel = action === 'time_in' ? 'Time In' : 'Time Out';
+    const actionClass = action === 'time_in' ? 'time-in' : 'time-out';
+
+    captureName.textContent = result.name || 'Unrecognized';
+    captureEmployeeId.textContent = result.employee_id || 'N/A';
+    captureAction.innerHTML = `<span class="action-badge ${actionClass}">${actionLabel}</span>`;
+    captureConfidence.innerHTML = `<span class="confidence-badge ${result.recognized ? 'high' : 'low'}">${confidence}%</span>`;
+
+    captureInfo.style.display = 'block';
 }
 
 function showOverlay(message, details, type = 'info') {
