@@ -97,8 +97,8 @@ class FaceRegistrationResult(BaseModel):
 
 
 class LoginRequest(BaseModel):
-    username: str
-    password: str
+    username: str = Field(..., max_length=50)
+    password: str = Field(..., max_length=72)
 
 
 class Token(BaseModel):
@@ -149,14 +149,14 @@ class AuditLogResponse(BaseModel):
 
 class AdminUserCreate(BaseModel):
     username: str = Field(..., min_length=3, max_length=50)
-    password: str = Field(..., min_length=6)
+    password: str = Field(..., min_length=6, max_length=72)
     full_name: Optional[str] = Field(None, max_length=100)
     role: str = Field(..., pattern="^(admin|hr|attendance)$")
 
 
 class AdminUserUpdate(BaseModel):
     full_name: Optional[str] = Field(None, max_length=100)
-    password: Optional[str] = Field(None, min_length=6)
+    password: Optional[str] = Field(None, min_length=6, max_length=72)
     role: Optional[str] = Field(None, pattern="^(admin|hr|attendance)$")
     is_active: Optional[bool] = None
 
