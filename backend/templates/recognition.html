@@ -171,41 +171,83 @@
 
     async function startCamera() {
         const deviceId = cameraSelect.value;
-        if (!deviceId) {
-            showToast('No camera selected', 'warning');
-            return;
-        }
 
         toggleBtn.disabled = true;
         toggleBtn.textContent = 'Starting...';
+        placeholder.innerHTML = '<p>Requesting camera access...</p>';
 
         try {
-            stream = await navigator.mediaDevices.getUserMedia({
-                video: {
-                    deviceId: deviceId,
-                    width: { ideal: 640 },
-                    height: { ideal: 480 }
-                }
-            });
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+                stream = null;
+            }
+
+            const constraints = {
+                video: deviceId
+                    ? { deviceId: { exact: deviceId }, width: { ideal: 640 }, height: { ideal: 480 } }
+                    : { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' }
+            };
+
+            console.log('Requesting camera with constraints:', constraints);
+            stream = await navigator.mediaDevices.getUserMedia(constraints);
+            console.log('Got stream:', stream);
 
             video.srcObject = stream;
+
+            await new Promise((resolve, reject) => {
+                video.onloadedmetadata = () => {
+                    console.log('Video metadata loaded');
+                    resolve();
+                };
+                video.onerror = (e) => {
+                    console.error('Video error:', e);
+                    reject(new Error('Video failed to load'));
+                };
+                setTimeout(() => reject(new Error('Video load timeout')), 5000);
+            });
+
+            await video.play();
+            console.log('Video playing');
+
             video.style.display = 'block';
             placeholder.style.display = 'none';
             toggleBtn.textContent = 'Stop Camera';
             toggleBtn.disabled = false;
             captureBtn.disabled = false;
+            showToast('Camera started', 'success');
         } catch (error) {
             console.error('Error starting camera:', error);
             toggleBtn.textContent = 'Start Camera';
             toggleBtn.disabled = false;
 
-            if (error.name === 'NotReadableError') {
-                showToast('Camera is being used by another application', 'error');
-            } else if (error.name === 'NotAllowedError') {
-                showToast('Camera permission was denied', 'error');
+            let message = 'Failed to start camera';
+            if (error.name === 'NotReadableError' || error.name === 'TrackStartError') {
+                message = 'Camera is being used by another application. Close other apps and try again.';
+            } else if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
+                message = 'Camera permission denied. Allow camera access in browser settings.';
+            } else if (error.name === 'NotFoundError' || error.name === 'DevicesNotFoundError') {
+                message = 'Camera not found. Make sure it is connected.';
+            } else if (error.name === 'OverconstrainedError') {
+                message = 'Camera does not support the requested settings. Trying simpler mode...';
+                try {
+                    stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                    video.srcObject = stream;
+                    await video.play();
+                    video.style.display = 'block';
+                    placeholder.style.display = 'none';
+                    toggleBtn.textContent = 'Stop Camera';
+                    captureBtn.disabled = false;
+                    showToast('Camera started (basic mode)', 'success');
+                    return;
+                } catch (e2) {
+                    message = 'Could not start camera: ' + e2.message;
+                }
             } else {
-                showToast('Failed to start camera: ' + error.message, 'error');
+                message = 'Camera error: ' + (error.message || error.name);
             }
+
+            placeholder.innerHTML = `<p>${message}</p><p class="subtitle">Use Manual Upload instead</p>`;
+            showToast(message, 'error');
         }
     }
 
