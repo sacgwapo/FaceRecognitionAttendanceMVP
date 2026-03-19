@@ -44,5 +44,25 @@ def get_db():
 
 
 def init_db():
-    from app.models import User, AttendanceRecord, AuditLog, SystemSettings
+    from app.models import User, AttendanceRecord, AuditLog, SystemSettings, AdminUser
+    from app.utils.security import get_password_hash
+    from app.config import get_settings
+
     Base.metadata.create_all(bind=engine)
+
+    settings = get_settings()
+    db = SessionLocal()
+    try:
+        admin_count = db.query(AdminUser).count()
+        if admin_count == 0:
+            default_admin = AdminUser(
+                username=settings.ADMIN_USERNAME,
+                password_hash=get_password_hash(settings.ADMIN_PASSWORD),
+                full_name="System Administrator",
+                role="admin",
+                is_active=True
+            )
+            db.add(default_admin)
+            db.commit()
+    finally:
+        db.close()

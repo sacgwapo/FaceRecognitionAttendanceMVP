@@ -1,0 +1,206 @@
+{% extends "base.html" %}
+
+{% block title %}Admin Accounts - Face Attendance System{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Admin Accounts</h1>
+    <p class="subtitle">Manage HR and Attendance user accounts</p>
+    <button class="btn btn-primary" onclick="showCreateModal()">Add Account</button>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <table class="data-table" id="accounts-table">
+            <thead>
+                <tr>
+                    <th>Username</th>
+                    <th>Full Name</th>
+                    <th>Role</th>
+                    <th>Status</th>
+                    <th>Last Login</th>
+                    <th>Created</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody id="accounts-body">
+                <tr>
+                    <td colspan="7" class="loading">Loading...</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div id="account-modal" class="modal" style="display: none;">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3 id="modal-title">Add Account</h3>
+            <button class="modal-close" onclick="closeModal()">&times;</button>
+        </div>
+        <form id="account-form">
+            <input type="hidden" id="account-id">
+            <div class="form-group">
+                <label for="username">Username *</label>
+                <input type="text" id="username" required minlength="3" maxlength="50">
+            </div>
+            <div class="form-group">
+                <label for="full-name">Full Name</label>
+                <input type="text" id="full-name" maxlength="100">
+            </div>
+            <div class="form-group">
+                <label for="role">Role *</label>
+                <select id="role" required>
+                    <option value="">Select Role</option>
+                    <option value="admin">Admin (Full Access)</option>
+                    <option value="hr">HR (Employee Management & Reports)</option>
+                    <option value="attendance">Attendance (Recognition Only)</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="password">Password * <span class="help-text">(min 6 characters)</span></label>
+                <input type="password" id="password" minlength="6">
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+                <button type="submit" class="btn btn-primary">Save</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div id="toast-container"></div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/app.js"></script>
+<script>
+    let accounts = [];
+
+    async function loadAccounts() {
+        try {
+            accounts = await fetchAPI('/api/admin-users');
+            renderAccounts();
+        } catch (error) {
+            console.error('Error loading accounts:', error);
+            showToast('Failed to load accounts', 'error');
+        }
+    }
+
+    function renderAccounts() {
+        const tbody = document.getElementById('accounts-body');
+
+        if (accounts.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" class="empty">No accounts found</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = accounts.map(account => `
+            <tr>
+                <td><strong>${account.username}</strong></td>
+                <td>${account.full_name || '-'}</td>
+                <td><span class="badge badge-${getRoleBadge(account.role)}">${account.role.toUpperCase()}</span></td>
+                <td><span class="badge ${account.is_active ? 'badge-success' : 'badge-danger'}">${account.is_active ? 'Active' : 'Inactive'}</span></td>
+                <td>${account.last_login ? formatDateTime(account.last_login) : 'Never'}</td>
+                <td>${formatDate(account.created_at)}</td>
+                <td class="actions">
+                    <button class="btn btn-small btn-secondary" onclick="editAccount('${account.id}')">Edit</button>
+                    <button class="btn btn-small btn-danger" onclick="deleteAccount('${account.id}', '${account.username}')">Delete</button>
+                </td>
+            </tr>
+        `).join('');
+    }
+
+    function getRoleBadge(role) {
+        const badges = {
+            'admin': 'danger',
+            'hr': 'info',
+            'attendance': 'success'
+        };
+        return badges[role] || 'secondary';
+    }
+
+    function showCreateModal() {
+        document.getElementById('modal-title').textContent = 'Add Account';
+        document.getElementById('account-form').reset();
+        document.getElementById('account-id').value = '';
+        document.getElementById('password').required = true;
+        document.getElementById('account-modal').style.display = 'flex';
+    }
+
+    function editAccount(id) {
+        const account = accounts.find(a => a.id === id);
+        if (!account) return;
+
+        document.getElementById('modal-title').textContent = 'Edit Account';
+        document.getElementById('account-id').value = account.id;
+        document.getElementById('username').value = account.username;
+        document.getElementById('full-name').value = account.full_name || '';
+        document.getElementById('role').value = account.role;
+        document.getElementById('password').value = '';
+        document.getElementById('password').required = false;
+        document.getElementById('account-modal').style.display = 'flex';
+    }
+
+    function closeModal() {
+        document.getElementById('account-modal').style.display = 'none';
+    }
+
+    document.getElementById('account-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+
+        const accountId = document.getElementById('account-id').value;
+        const data = {
+            username: document.getElementById('username').value,
+            full_name: document.getElementById('full-name').value || null,
+            role: document.getElementById('role').value,
+        };
+
+        const password = document.getElementById('password').value;
+        if (password) {
+            data.password = password;
+        }
+
+        try {
+            if (accountId) {
+                await fetchAPI(`/api/admin-users/${accountId}`, {
+                    method: 'PUT',
+                    body: JSON.stringify(data)
+                });
+                showToast('Account updated successfully');
+            } else {
+                if (!password) {
+                    showToast('Password is required for new accounts', 'error');
+                    return;
+                }
+                await fetchAPI('/api/admin-users', {
+                    method: 'POST',
+                    body: JSON.stringify(data)
+                });
+                showToast('Account created successfully');
+            }
+
+            closeModal();
+            loadAccounts();
+        } catch (error) {
+            showToast(error.message || 'Operation failed', 'error');
+        }
+    });
+
+    async function deleteAccount(id, username) {
+        if (!confirm(`Delete account "${username}"?\n\nThis action cannot be undone.`)) {
+            return;
+        }
+
+        try {
+            await fetchAPI(`/api/admin-users/${id}`, { method: 'DELETE' });
+            showToast('Account deleted successfully');
+            loadAccounts();
+        } catch (error) {
+            showToast(error.message || 'Delete failed', 'error');
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', loadAccounts);
+</script>
+{% endblock %}

@@ -1,0 +1,156 @@
+{% extends "base.html" %}
+
+{% block title %}HR Dashboard - Face Attendance System{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>HR Dashboard</h1>
+    <p class="subtitle">Employee Management & Reporting</p>
+</div>
+
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-value" id="total-employees">0</div>
+        <div class="stat-label">Total Employees</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value" id="present-today">0</div>
+        <div class="stat-label">Present Today</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value" id="registered-faces">0</div>
+        <div class="stat-label">Registered Faces</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value" id="pending-registrations">0</div>
+        <div class="stat-label">Pending Registrations</div>
+    </div>
+</div>
+
+<div class="action-grid">
+    <div class="action-card" onclick="window.location.href='/users'">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+            <circle cx="9" cy="7" r="4"></circle>
+            <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+            <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+        </svg>
+        <h3>Manage Employees</h3>
+        <p>Add, edit, and remove employee records</p>
+    </div>
+
+    <div class="action-card" onclick="window.location.href='/attendance'">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+            <line x1="16" y1="2" x2="16" y2="6"></line>
+            <line x1="8" y1="2" x2="8" y2="6"></line>
+            <line x1="3" y1="10" x2="21" y2="10"></line>
+        </svg>
+        <h3>Attendance Records</h3>
+        <p>View and manage attendance logs</p>
+    </div>
+
+    <div class="action-card" onclick="window.location.href='/exports'">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="7 10 12 15 17 10"></polyline>
+            <line x1="12" y1="15" x2="12" y2="3"></line>
+        </svg>
+        <h3>Export Reports</h3>
+        <p>Generate Excel and CSV reports</p>
+    </div>
+
+    <div class="action-card" onclick="window.location.href='/admin-accounts'">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+            <circle cx="8.5" cy="7" r="4"></circle>
+            <polyline points="17 11 19 13 23 9"></polyline>
+        </svg>
+        <h3>Admin Accounts</h3>
+        <p>Manage HR and Attendance users</p>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h3>Recent Attendance</h3>
+        <div class="header-actions">
+            <input type="date" id="filter-date" class="date-input" />
+            <button class="btn btn-secondary btn-small" onclick="refreshRecent()">Refresh</button>
+        </div>
+    </div>
+    <div class="card-body">
+        <table class="data-table" id="recent-table">
+            <thead>
+                <tr>
+                    <th>Time</th>
+                    <th>Employee ID</th>
+                    <th>Name</th>
+                    <th>Action</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody id="recent-body">
+                <tr>
+                    <td colspan="5" class="loading">Loading...</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    async function loadStats() {
+        try {
+            const stats = await fetchAPI('/api/attendance/stats');
+            document.getElementById('total-employees').textContent = stats.total_users;
+            document.getElementById('present-today').textContent = stats.today_attendance;
+            document.getElementById('registered-faces').textContent = stats.registered_faces;
+            document.getElementById('pending-registrations').textContent = stats.total_users - stats.registered_faces;
+        } catch (error) {
+            console.error('Error loading stats:', error);
+        }
+    }
+
+    async function loadRecentAttendance() {
+        const date = document.getElementById('filter-date').value || new Date().toISOString().split('T')[0];
+        try {
+            const records = await fetchAPI(`/api/attendance?date=${date}&limit=20`);
+            const tbody = document.getElementById('recent-body');
+
+            if (records.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" class="empty">No records found</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = records.map(record => `
+                <tr>
+                    <td>${formatTime(record.time_in || record.created_at)}</td>
+                    <td>${record.employee_id || '-'}</td>
+                    <td>${record.name || 'Unknown'}</td>
+                    <td><span class="badge ${record.time_out ? 'badge-info' : 'badge-success'}">${record.time_out ? 'Time Out' : 'Time In'}</span></td>
+                    <td><span class="badge ${record.is_recognized ? 'badge-success' : 'badge-warning'}">${record.is_recognized ? 'Recognized' : 'Unrecognized'}</span></td>
+                </tr>
+            `).join('');
+        } catch (error) {
+            console.error('Error loading attendance:', error);
+        }
+    }
+
+    function refreshRecent() {
+        loadRecentAttendance();
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        const today = new Date().toISOString().split('T')[0];
+        document.getElementById('filter-date').value = today;
+
+        loadStats();
+        loadRecentAttendance();
+
+        document.getElementById('filter-date').addEventListener('change', loadRecentAttendance);
+    });
+</script>
+{% endblock %}

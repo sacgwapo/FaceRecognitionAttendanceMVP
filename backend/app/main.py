@@ -28,7 +28,7 @@ import os
 from app.config import get_settings, ensure_directories
 from app.database import init_db
 from app.utils.logging import setup_logging, get_logger
-from app.routers import auth, users, attendance, recognition, export, settings
+from app.routers import auth, users, attendance, recognition, export, settings, admin_users
 
 
 @asynccontextmanager
@@ -64,6 +64,7 @@ app.add_middleware(
 )
 
 app.include_router(auth.router)
+app.include_router(admin_users.router)
 app.include_router(users.router)
 app.include_router(attendance.router)
 app.include_router(recognition.router)
@@ -118,6 +119,16 @@ async def exports_page(request: Request):
 @app.get("/settings-page", response_class=HTMLResponse)
 async def settings_page(request: Request):
     return templates.TemplateResponse("settings.html", {"request": request})
+
+
+@app.get("/hr-dashboard", response_class=HTMLResponse)
+async def hr_dashboard_page(request: Request):
+    return templates.TemplateResponse("hr_dashboard.html", {"request": request})
+
+
+@app.get("/admin-accounts", response_class=HTMLResponse)
+async def admin_accounts_page(request: Request):
+    return templates.TemplateResponse("admin_accounts.html", {"request": request})
 
 
 if __name__ == "__main__":

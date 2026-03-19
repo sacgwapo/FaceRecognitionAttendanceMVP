@@ -67,7 +67,16 @@
 
                 if (response.ok) {
                     localStorage.setItem('access_token', data.access_token);
-                    window.location.href = '/dashboard';
+                    localStorage.setItem('user_role', data.role);
+                    localStorage.setItem('username', data.username);
+
+                    if (data.role === 'attendance') {
+                        window.location.href = '/recognition';
+                    } else if (data.role === 'hr') {
+                        window.location.href = '/hr-dashboard';
+                    } else {
+                        window.location.href = '/dashboard';
+                    }
                 } else {
                     errorDiv.textContent = data.detail || 'Login failed';
                     errorDiv.style.display = 'block';

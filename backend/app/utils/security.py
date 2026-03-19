@@ -10,13 +10,24 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 
+from sqlalchemy.orm import Session
+
 from app.config import get_settings
 from app.schemas import TokenData
+from app.database import SessionLocal
 
 settings = get_settings()
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 security = HTTPBearer(auto_error=False)
+
+
+def get_db_session():
+    db = SessionLocal()
+    try:
+        return db
+    finally:
+        db.close()
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
@@ -38,13 +49,14 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     return encoded_jwt
 
 
-def verify_token(token: str) -> Optional[TokenData]:
+def verify_token(token: str) -> Optional[dict]:
     try:
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
         username: str = payload.get("sub")
+        role: str = payload.get("role")
         if username is None:
             return None
-        return TokenData(username=username)
+        return {"username": username, "role": role}
     except JWTError:
         return None
 
@@ -52,7 +64,7 @@ def verify_token(token: str) -> Optional[TokenData]:
 async def get_current_user(
     request: Request,
     credentials: HTTPAuthorizationCredentials = Depends(security)
-) -> str:
+) -> dict:
     token = None
     if credentials:
         token = credentials.credentials
@@ -73,13 +85,48 @@ async def get_current_user(
             detail="Invalid or expired token",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    return token_data.username
+    return token_data
 
 
-def authenticate_admin(username: str, password: str) -> bool:
-    if username == settings.ADMIN_USERNAME and password == settings.ADMIN_PASSWORD:
-        return True
-    return False
+def require_role(*allowed_roles: str):
+    async def role_checker(current_user: dict = Depends(get_current_user)) -> dict:
+        if current_user.get("role") not in allowed_roles:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Access denied. Required role: {', '.join(allowed_roles)}"
+            )
+        return current_user
+    return role_checker
+
+
+def authenticate_admin(username: str, password: str, db: Session):
+    from app.models import AdminUser
+
+    if not db:
+        if username == settings.ADMIN_USERNAME and password == settings.ADMIN_PASSWORD:
+            return {"username": username, "role": "admin", "full_name": "Administrator"}
+        return None
+
+    admin = db.query(AdminUser).filter(
+        AdminUser.username == username,
+        AdminUser.is_active == True
+    ).first()
+
+    if not admin:
+        return None
+
+    if not verify_password(password, admin.password_hash):
+        return None
+
+    admin.last_login = datetime.utcnow()
+    db.commit()
+
+    return {
+        "username": admin.username,
+        "role": admin.role,
+        "full_name": admin.full_name,
+        "id": admin.id
+    }
 
 
 def get_client_ip(request: Request) -> str:

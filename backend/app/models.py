@@ -92,3 +92,19 @@ class SystemSettings(Base):
 
     def __repr__(self):
         return f"<SystemSettings {self.key}>"
+
+
+class AdminUser(Base):
+    __tablename__ = "admin_users"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    username = Column(String(50), unique=True, nullable=False, index=True)
+    password_hash = Column(String(255), nullable=False)
+    full_name = Column(String(100), nullable=True)
+    role = Column(String(20), nullable=False, default="attendance")
+    is_active = Column(Boolean, default=True, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    last_login = Column(DateTime, nullable=True)
+
+    def __repr__(self):
+        return f"<AdminUser {self.username} ({self.role})>"

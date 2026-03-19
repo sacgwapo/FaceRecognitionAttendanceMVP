@@ -145,3 +145,36 @@ class AuditLogResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class AdminUserCreate(BaseModel):
+    username: str = Field(..., min_length=3, max_length=50)
+    password: str = Field(..., min_length=6)
+    full_name: Optional[str] = Field(None, max_length=100)
+    role: str = Field(..., pattern="^(admin|hr|attendance)$")
+
+
+class AdminUserUpdate(BaseModel):
+    full_name: Optional[str] = Field(None, max_length=100)
+    password: Optional[str] = Field(None, min_length=6)
+    role: Optional[str] = Field(None, pattern="^(admin|hr|attendance)$")
+    is_active: Optional[bool] = None
+
+
+class AdminUserResponse(BaseModel):
+    id: str
+    username: str
+    full_name: Optional[str]
+    role: str
+    is_active: bool
+    created_at: datetime
+    last_login: Optional[datetime]
+
+    class Config:
+        from_attributes = True
+
+
+class LoginResponse(Token):
+    role: str
+    username: str
+    full_name: Optional[str]
