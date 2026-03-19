@@ -3,85 +3,64 @@
 {% block title %}Recognition - Face Attendance System{% endblock %}
 
 {% block content %}
-<div class="page-header">
-    <h1>Face Recognition</h1>
-    <p class="subtitle">Scan face to record attendance</p>
-</div>
-
-<div class="recognition-container">
-    <div class="recognition-panel">
-        <div class="card">
-            <div class="card-header">
-                <h3>Camera Feed</h3>
-                <div class="camera-controls">
-                    <select id="camera-select">
-                        <option value="">Select Camera</option>
-                    </select>
-                    <button class="btn btn-secondary" id="toggle-camera">Start Camera</button>
-                </div>
-            </div>
-            <div class="card-body">
-                <div class="video-container">
-                    <video id="video" autoplay playsinline></video>
-                    <canvas id="canvas" style="display: none;"></canvas>
-                    <div id="video-placeholder" class="video-placeholder">
-                        <p>Camera not started</p>
-                        <p class="subtitle">Click "Start Camera" to begin</p>
-                    </div>
-                </div>
+<div class="recognition-main">
+    <div class="recognition-header">
+        <div class="header-left">
+            <h1>Face Recognition Attendance</h1>
+            <div class="camera-selector">
+                <select id="camera-select">
+                    <option value="">Select Camera</option>
+                </select>
+                <button class="btn btn-secondary" id="toggle-camera">Start Camera</button>
             </div>
         </div>
-
-        <div class="card">
-            <div class="card-header">
-                <h3>Manual Upload</h3>
-            </div>
-            <div class="card-body">
-                <div class="upload-area" id="upload-area">
-                    <input type="file" id="file-input" accept="image/*" style="display: none;">
-                    <p>Click or drag image here</p>
-                    <p class="subtitle">Supported: JPG, PNG, WEBP</p>
-                </div>
-            </div>
+        <div class="header-right">
+            <button class="btn btn-primary" onclick="window.location.href='/users'">Register User</button>
+            <button class="btn btn-secondary" onclick="window.location.href='/attendance'">View Logs</button>
+            <button class="btn btn-secondary" onclick="window.location.href='/exports'">Export Report</button>
         </div>
     </div>
 
-    <div class="action-panel">
-        <div class="card">
-            <div class="card-header">
-                <h3>Actions</h3>
-            </div>
-            <div class="card-body">
-                <div class="action-type">
-                    <label class="radio-label">
-                        <input type="radio" name="action" value="time_in" checked> Time In
-                    </label>
-                    <label class="radio-label">
-                        <input type="radio" name="action" value="time_out"> Time Out
-                    </label>
+    <div class="recognition-content">
+        <div class="video-main-container">
+            <div class="video-wrapper">
+                <video id="video" autoplay playsinline></video>
+                <canvas id="canvas" style="display: none;"></canvas>
+                <div id="video-placeholder" class="video-placeholder">
+                    <div class="placeholder-icon">
+                        <svg width="80" height="80" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+                            <circle cx="12" cy="13" r="4"></circle>
+                        </svg>
+                    </div>
+                    <p class="placeholder-title">Camera Ready</p>
+                    <p class="placeholder-subtitle">Select a camera and click "Start Camera"</p>
                 </div>
-                <button class="btn btn-primary btn-large" id="capture-btn" disabled>
-                    Capture & Identify
-                </button>
+                <div id="recognition-overlay" class="recognition-overlay" style="display: none;">
+                    <div class="overlay-content">
+                        <div id="overlay-icon" class="overlay-icon"></div>
+                        <div id="overlay-message" class="overlay-message"></div>
+                        <div id="overlay-details" class="overlay-details"></div>
+                    </div>
+                </div>
+                <div id="liveness-indicator" class="liveness-indicator" style="display: none;">
+                    <span class="liveness-dot"></span>
+                    <span class="liveness-text">Liveness Check</span>
+                </div>
             </div>
-        </div>
 
-        <div class="card result-card" id="result-card" style="display: none;">
-            <div class="card-header">
-                <h3>Result</h3>
-            </div>
-            <div class="card-body">
-                <div id="result-content"></div>
-            </div>
-        </div>
-
-        <div class="card">
-            <div class="card-header">
-                <h3>Recent Activity</h3>
-            </div>
-            <div class="card-body">
-                <div id="recent-activity" class="activity-list">
-                    <p class="empty">No recent activity</p>
+            <div class="action-controls">
+                <div class="action-type-selector">
+                    <label class="action-radio">
+                        <input type="radio" name="action" value="time_in" checked>
+                        <span class="radio-button"></span>
+                        <span class="radio-label">Time In</span>
+                    </label>
+                    <label class="action-radio">
+                        <input type="radio" name="action" value="time_out">
+                        <span class="radio-button"></span>
+                        <span class="radio-label">Time Out</span>
+                    </label>
                 </div>
             </div>
         </div>
@@ -90,328 +69,5 @@
 {% endblock %}
 
 {% block scripts %}
-<script>
-    let stream = null;
-    let uploadedFile = null;
-    const video = document.getElementById('video');
-    const canvas = document.getElementById('canvas');
-    const placeholder = document.getElementById('video-placeholder');
-    const captureBtn = document.getElementById('capture-btn');
-    const toggleBtn = document.getElementById('toggle-camera');
-    const cameraSelect = document.getElementById('camera-select');
-    const recentActivity = [];
-
-    async function getCameras() {
-        if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) {
-            placeholder.innerHTML = `
-                <p>Camera API not available</p>
-                <p class="subtitle">Your browser doesn't support camera access or you're not using HTTPS</p>
-                <p class="subtitle">Use the Manual Upload option instead</p>
-            `;
-            toggleBtn.disabled = true;
-            cameraSelect.disabled = true;
-            return;
-        }
-
-        try {
-            const tempStream = await navigator.mediaDevices.getUserMedia({ video: true });
-            tempStream.getTracks().forEach(track => track.stop());
-
-            const devices = await navigator.mediaDevices.enumerateDevices();
-            const videoDevices = devices.filter(d => d.kind === 'videoinput');
-
-            if (videoDevices.length === 0) {
-                placeholder.innerHTML = `
-                    <p>No camera detected</p>
-                    <p class="subtitle">Connect a webcam or use Manual Upload below</p>
-                `;
-                toggleBtn.disabled = true;
-                cameraSelect.innerHTML = '<option value="">No cameras found</option>';
-                return;
-            }
-
-            cameraSelect.innerHTML = '<option value="">Select Camera</option>';
-            console.log('Available cameras:', videoDevices.map((d, i) => ({ id: d.deviceId, label: d.label || `Camera ${i + 1}` })));
-            videoDevices.forEach((device, index) => {
-                const option = document.createElement('option');
-                option.value = device.deviceId;
-                option.text = device.label || `Camera ${index + 1}`;
-                cameraSelect.appendChild(option);
-            });
-
-            if (videoDevices.length === 1) {
-                cameraSelect.value = videoDevices[0].deviceId;
-            }
-            placeholder.innerHTML = `
-                <p>Camera ready</p>
-                <p class="subtitle">${videoDevices.length} camera(s) detected - Click "Start Camera"</p>
-            `;
-        } catch (error) {
-            console.error('Error accessing cameras:', error);
-            let message = 'Camera access denied';
-            let subtitle = 'Please allow camera access in your browser settings';
-
-            if (error.name === 'NotFoundError' || error.name === 'DevicesNotFoundError') {
-                message = 'No camera found';
-                subtitle = 'Connect a webcam or use Manual Upload';
-            } else if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
-                message = 'Camera permission denied';
-                subtitle = 'Click the camera icon in your browser address bar to allow access';
-            } else if (error.name === 'NotReadableError') {
-                message = 'Camera is in use';
-                subtitle = 'Close other apps using the camera and try again';
-            }
-
-            placeholder.innerHTML = `
-                <p>${message}</p>
-                <p class="subtitle">${subtitle}</p>
-                <p class="subtitle">You can still use Manual Upload below</p>
-            `;
-            toggleBtn.disabled = true;
-            cameraSelect.disabled = true;
-        }
-    }
-
-    async function startCamera() {
-        const deviceId = cameraSelect.value;
-        const selectedOption = cameraSelect.options[cameraSelect.selectedIndex];
-        console.log('Selected camera:', { deviceId, text: selectedOption?.text, index: cameraSelect.selectedIndex });
-
-        if (!deviceId) {
-            showToast('Please select a camera from the dropdown', 'warning');
-            return;
-        }
-
-        toggleBtn.disabled = true;
-        toggleBtn.textContent = 'Starting...';
-        placeholder.innerHTML = '<p>Requesting camera access...</p>';
-
-        try {
-            if (stream) {
-                stream.getTracks().forEach(track => track.stop());
-                stream = null;
-            }
-
-            const constraints = {
-                video: deviceId
-                    ? { deviceId: { exact: deviceId }, width: { ideal: 640 }, height: { ideal: 480 } }
-                    : { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' }
-            };
-
-            console.log('Requesting camera with constraints:', constraints);
-            stream = await navigator.mediaDevices.getUserMedia(constraints);
-            console.log('Got stream:', stream);
-
-            video.srcObject = stream;
-
-            await new Promise((resolve, reject) => {
-                video.onloadedmetadata = () => {
-                    console.log('Video metadata loaded');
-                    resolve();
-                };
-                video.onerror = (e) => {
-                    console.error('Video error:', e);
-                    reject(new Error('Video failed to load'));
-                };
-                setTimeout(() => reject(new Error('Video load timeout')), 5000);
-            });
-
-            await video.play();
-            console.log('Video playing');
-
-            video.style.display = 'block';
-            placeholder.style.display = 'none';
-            toggleBtn.textContent = 'Stop Camera';
-            toggleBtn.disabled = false;
-            captureBtn.disabled = false;
-            showToast('Camera started', 'success');
-        } catch (error) {
-            console.error('Error starting camera:', error);
-            toggleBtn.textContent = 'Start Camera';
-            toggleBtn.disabled = false;
-
-            let message = 'Failed to start camera';
-            if (error.name === 'NotReadableError' || error.name === 'TrackStartError') {
-                message = 'Camera is being used by another application. Close other apps and try again.';
-            } else if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
-                message = 'Camera permission denied. Allow camera access in browser settings.';
-            } else if (error.name === 'NotFoundError' || error.name === 'DevicesNotFoundError') {
-                message = 'Camera not found. Make sure it is connected.';
-            } else if (error.name === 'OverconstrainedError') {
-                message = 'Camera does not support the requested settings. Trying simpler mode...';
-                try {
-                    stream = await navigator.mediaDevices.getUserMedia({ video: true });
-                    video.srcObject = stream;
-                    await video.play();
-                    video.style.display = 'block';
-                    placeholder.style.display = 'none';
-                    toggleBtn.textContent = 'Stop Camera';
-                    captureBtn.disabled = false;
-                    showToast('Camera started (basic mode)', 'success');
-                    return;
-                } catch (e2) {
-                    message = 'Could not start camera: ' + e2.message;
-                }
-            } else {
-                message = 'Camera error: ' + (error.message || error.name);
-            }
-
-            placeholder.innerHTML = `<p>${message}</p><p class="subtitle">Use Manual Upload instead</p>`;
-            showToast(message, 'error');
-        }
-    }
-
-    function stopCamera() {
-        if (stream) {
-            stream.getTracks().forEach(track => track.stop());
-            stream = null;
-        }
-        video.srcObject = null;
-        video.style.display = 'none';
-        placeholder.style.display = 'flex';
-        toggleBtn.textContent = 'Start Camera';
-        if (!uploadedFile) {
-            captureBtn.disabled = true;
-        }
-    }
-
-    toggleBtn.addEventListener('click', () => {
-        if (stream) {
-            stopCamera();
-        } else {
-            startCamera();
-        }
-    });
-
-    const uploadArea = document.getElementById('upload-area');
-    const fileInput = document.getElementById('file-input');
-
-    uploadArea.addEventListener('click', () => fileInput.click());
-    uploadArea.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        uploadArea.classList.add('dragover');
-    });
-    uploadArea.addEventListener('dragleave', () => {
-        uploadArea.classList.remove('dragover');
-    });
-    uploadArea.addEventListener('drop', (e) => {
-        e.preventDefault();
-        uploadArea.classList.remove('dragover');
-        if (e.dataTransfer.files.length > 0) {
-            handleFile(e.dataTransfer.files[0]);
-        }
-    });
-
-    fileInput.addEventListener('change', (e) => {
-        if (e.target.files.length > 0) {
-            handleFile(e.target.files[0]);
-        }
-    });
-
-    function handleFile(file) {
-        if (!file.type.startsWith('image/')) {
-            showToast('Please select an image file', 'warning');
-            return;
-        }
-        uploadedFile = file;
-        uploadArea.innerHTML = `<p>Selected: ${file.name}</p><p class="subtitle">Click to change</p>`;
-        captureBtn.disabled = false;
-    }
-
-    captureBtn.addEventListener('click', async () => {
-        let imageBlob;
-
-        if (uploadedFile) {
-            imageBlob = uploadedFile;
-        } else if (stream) {
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-            canvas.getContext('2d').drawImage(video, 0, 0);
-            imageBlob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.9));
-        } else {
-            showToast('No image source available', 'warning');
-            return;
-        }
-
-        const action = document.querySelector('input[name="action"]:checked').value;
-
-        captureBtn.disabled = true;
-        captureBtn.textContent = 'Processing...';
-
-        try {
-            const formData = new FormData();
-            formData.append('face_image', imageBlob, 'capture.jpg');
-            formData.append('action', action);
-
-            const response = await fetch('/api/recognition/identify', {
-                method: 'POST',
-                body: formData
-            });
-
-            const result = await response.json();
-            displayResult(result, action);
-
-            if (uploadedFile) {
-                uploadedFile = null;
-                uploadArea.innerHTML = '<p>Click or drag image here</p><p class="subtitle">Supported: JPG, PNG, WEBP</p>';
-            }
-        } catch (error) {
-            console.error('Recognition error:', error);
-            showToast('Recognition failed. Please try again.', 'error');
-        } finally {
-            captureBtn.disabled = !stream && !uploadedFile;
-            captureBtn.textContent = 'Capture & Identify';
-        }
-    });
-
-    function displayResult(result, action) {
-        const resultCard = document.getElementById('result-card');
-        const resultContent = document.getElementById('result-content');
-        resultCard.style.display = 'block';
-
-        const actionLabel = action === 'time_in' ? 'Time In' : 'Time Out';
-        const confidence = (result.confidence * 100).toFixed(1);
-
-        if (result.recognized) {
-            resultContent.innerHTML = `
-                <div class="result-success">
-                    <div class="result-icon">&#10003;</div>
-                    <div class="result-name">${result.name}</div>
-                    <div class="result-id">ID: ${result.employee_id}</div>
-                    <div class="result-confidence">Confidence: ${confidence}%</div>
-                    <div class="result-action">${actionLabel} recorded</div>
-                    <div class="result-message">${result.message}</div>
-                </div>
-            `;
-            addRecentActivity(result.name, actionLabel, true);
-        } else {
-            resultContent.innerHTML = `
-                <div class="result-failure">
-                    <div class="result-icon">?</div>
-                    <div class="result-name">Unrecognized</div>
-                    <div class="result-confidence">Confidence: ${confidence}%</div>
-                    <div class="result-message">${result.message}</div>
-                </div>
-            `;
-            addRecentActivity('Unknown', actionLabel, false);
-        }
-    }
-
-    function addRecentActivity(name, action, success) {
-        const time = new Date().toLocaleTimeString();
-        recentActivity.unshift({ name, action, success, time });
-        if (recentActivity.length > 5) recentActivity.pop();
-
-        const container = document.getElementById('recent-activity');
-        container.innerHTML = recentActivity.map(item => `
-            <div class="activity-item ${item.success ? 'success' : 'warning'}">
-                <span class="activity-time">${item.time}</span>
-                <span class="activity-name">${item.name}</span>
-                <span class="activity-action">${item.action}</span>
-            </div>
-        `).join('');
-    }
-
-    document.addEventListener('DOMContentLoaded', getCameras);
-</script>
+<script src="/static/js/recognition.js"></script>
 {% endblock %}

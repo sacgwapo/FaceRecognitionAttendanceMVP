@@ -4,9 +4,13 @@ A production-ready, self-hosted face recognition attendance system designed to r
 
 ## Features
 
-- **Face Recognition Attendance**: Register users with face images, detect and recognize faces automatically
+- **Real-Time Face Recognition**: Automatic face detection and recognition using live camera feed
+- **Liveness Detection**: Basic anti-spoofing measures to prevent photo attacks
 - **Time In/Out Tracking**: Automatic logging with duplicate prevention
-- **Confidence Scoring**: Only accept matches above configurable threshold
+- **Snapshot Evidence**: Each recognition attempt is saved as evidence
+- **Automatic Camera Reconnection**: Recovers automatically if camera disconnects
+- **Adjustable Confidence Threshold**: Fine-tune recognition sensitivity in settings
+- **Clean Modern Interface**: Large camera preview with clear on-screen messages
 - **Admin Dashboard**: Overview of today's attendance, quick actions
 - **User Management**: Add, edit, delete users and their face registrations
 - **Attendance Records**: Filter by date, name, ID, status
@@ -173,6 +177,7 @@ Default credentials:
    Add Host Path Volumes:
    - /mnt/pool/face-attendance-db -> /app/data/db
    - /mnt/pool/face-attendance-images -> /app/data/faces
+   - /mnt/pool/face-attendance-snapshots -> /app/data/snapshots
    - /mnt/pool/face-attendance-exports -> /app/data/exports
    - /mnt/pool/face-attendance-logs -> /app/data/logs
 
@@ -203,6 +208,7 @@ Default credentials:
    volumes:
      - /mnt/pool/data/face-db:/app/data/db
      - /mnt/pool/data/face-images:/app/data/faces
+     - /mnt/pool/data/face-snapshots:/app/data/snapshots
      - /mnt/pool/data/face-exports:/app/data/exports
      - /mnt/pool/data/face-logs:/app/data/logs
    ```
@@ -239,16 +245,17 @@ Default credentials:
 ### 3. Record Attendance
 
 1. Go to **Recognition** page
-2. Either:
-   - Start camera and capture live
-   - Upload an image
-3. Select **Time In** or **Time Out**
-4. Click **Capture & Identify**
-5. System will:
-   - Detect face
-   - Compare against registered faces
+2. Select your camera from the dropdown
+3. Click **Start Camera**
+4. Select **Time In** or **Time Out**
+5. System will automatically:
+   - Perform liveness detection
+   - Detect and recognize faces every 2 seconds
+   - Save a snapshot of each attempt
+   - Display "Welcome, [Name]" for successful recognition
+   - Display "Face not recognized" for failed attempts
    - Record attendance if match found (above threshold)
-   - Log as "Unrecognized" if no match
+6. Camera automatically reconnects if disconnected
 
 ### 4. Export Reports
 

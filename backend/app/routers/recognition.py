@@ -26,6 +26,12 @@ async def identify_face(
     action: str = Form("time_in"),
     db: Session = Depends(get_db)
 ):
+    import os
+    from datetime import datetime
+    from pathlib import Path
+    from app.config import get_settings
+
+    settings = get_settings()
     image_data = await face_image.read()
 
     face_service = get_face_service()
@@ -37,6 +43,23 @@ async def identify_face(
             confidence=0.0,
             message=message
         )
+
+    snapshot_path = None
+    try:
+        snapshots_dir = settings.DATA_DIR / "snapshots"
+        snapshots_dir.mkdir(parents=True, exist_ok=True)
+
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+        snapshot_filename = f"snapshot_{timestamp}.jpg"
+        snapshot_path = snapshots_dir / snapshot_filename
+
+        with open(snapshot_path, 'wb') as f:
+            f.write(image_data)
+
+        logger.info(f"Snapshot saved: {snapshot_path}")
+    except Exception as e:
+        logger.error(f"Failed to save snapshot: {e}")
+        snapshot_path = None
 
     registered_users = db.query(User).filter(
         User.face_registered == True,

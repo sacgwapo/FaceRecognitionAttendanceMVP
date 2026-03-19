@@ -42,6 +42,7 @@ class Settings(BaseSettings):
     FACES_DIR: Path = Path("/app/data/faces")
     EXPORTS_DIR: Path = Path("/app/data/exports")
     LOGS_DIR: Path = Path("/app/data/logs")
+    SNAPSHOTS_DIR: Path = Path("/app/data/snapshots")
 
     LOG_LEVEL: str = "INFO"
     LOG_FORMAT: str = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
@@ -61,5 +62,5 @@ def get_settings() -> Settings:
 
 def ensure_directories():
     settings = get_settings()
-    for dir_path in [settings.DATA_DIR, settings.FACES_DIR, settings.EXPORTS_DIR, settings.LOGS_DIR]:
+    for dir_path in [settings.DATA_DIR, settings.FACES_DIR, settings.EXPORTS_DIR, settings.LOGS_DIR, settings.SNAPSHOTS_DIR]:
         dir_path.mkdir(parents=True, exist_ok=True)
