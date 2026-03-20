@@ -3,30 +3,23 @@
 {% block title %}Recognition - Face Attendance System{% endblock %}
 
 {% block content %}
-<div class="recognition-main">
-    <div class="recognition-header">
-        <div class="header-left">
-            <h1>Face Recognition Attendance</h1>
-            <div class="camera-selector">
-                <select id="camera-select">
-                    <option value="">Select Camera</option>
-                </select>
-                <button class="btn btn-secondary" id="toggle-camera">Start Camera</button>
-            </div>
-        </div>
-        <div class="header-right">
-            <button class="btn btn-primary" onclick="window.location.href='/users'">Register User</button>
-            <button class="btn btn-secondary" onclick="window.location.href='/attendance'">View Logs</button>
-            <button class="btn btn-secondary" onclick="window.location.href='/exports'">Export Report</button>
+<div class="recognition-view">
+    <div class="recognition-view-header">
+        <h1>RECOGNITION VIEW</h1>
+        <div class="camera-selector-top">
+            <select id="camera-select">
+                <option value="">Select Camera</option>
+            </select>
+            <button class="btn btn-secondary btn-sm" id="toggle-camera">Start Camera</button>
         </div>
     </div>
 
-    <div class="recognition-content">
-        <div class="video-main-container">
-            <div class="video-wrapper">
+    <div class="recognition-split-layout">
+        <div class="recognition-left-panel">
+            <div class="video-feed-container">
                 <video id="video" autoplay playsinline></video>
                 <canvas id="canvas" style="display: none;"></canvas>
-                <div id="video-placeholder" class="video-placeholder">
+                <div id="video-placeholder" class="video-placeholder-dark">
                     <div class="placeholder-icon">
                         <svg width="80" height="80" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
@@ -47,62 +40,51 @@
                     <span class="liveness-dot"></span>
                     <span class="liveness-text">Liveness Check</span>
                 </div>
+                <div class="name-overlay" id="name-overlay" style="display: none;"></div>
             </div>
 
-            <div class="action-controls">
-                <div class="action-type-selector">
-                    <label class="action-radio">
-                        <input type="radio" name="action" value="time_in" checked>
-                        <span class="radio-button"></span>
-                        <span class="radio-label">Time In</span>
-                    </label>
-                    <label class="action-radio">
-                        <input type="radio" name="action" value="time_out">
-                        <span class="radio-button"></span>
-                        <span class="radio-label">Time Out</span>
-                    </label>
+            <div class="bottom-controls">
+                <div class="capture-button-wrapper">
+                    <button class="capture-button" id="capture-btn" disabled>
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <circle cx="12" cy="12" r="3" fill="currentColor"></circle>
+                        </svg>
+                    </button>
+                    <span class="capture-label">CAPTURE BUTTON</span>
                 </div>
-                <button class="btn btn-primary btn-lg" id="capture-btn" disabled>
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <circle cx="12" cy="12" r="10"></circle>
-                        <circle cx="12" cy="12" r="3"></circle>
-                    </svg>
-                    Capture & Recognize
-                </button>
+
+                <div class="time-controls">
+                    <div class="time-section">
+                        <div class="time-header">time in | time out</div>
+                        <div class="time-buttons">
+                            <button class="time-btn time-in-btn active" data-action="time_in">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <polyline points="20 6 9 17 4 12"></polyline>
+                                </svg>
+                                TIME IN
+                            </button>
+                            <button class="time-btn time-out-btn" data-action="time_out">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                                    <polyline points="16 17 21 12 16 7"></polyline>
+                                    <line x1="21" y1="12" x2="9" y2="12"></line>
+                                </svg>
+                                TIME OUT
+                            </button>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
 
-        <div class="screenshot-container">
-            <div class="screenshot-header">
-                <h3>Latest Capture</h3>
-                <span id="capture-time" class="capture-time"></span>
+        <div class="recognition-right-panel">
+            <div class="recent-captures-header">
+                <h2>recent captures</h2>
             </div>
-            <div id="screenshot-display" class="screenshot-display">
-                <div class="screenshot-placeholder">
-                    <svg width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-                        <circle cx="8.5" cy="8.5" r="1.5"></circle>
-                        <polyline points="21 15 16 10 5 21"></polyline>
-                    </svg>
-                    <p>No capture yet</p>
-                </div>
-            </div>
-            <div id="capture-info" class="capture-info" style="display: none;">
-                <div class="info-row">
-                    <span class="info-label">Name:</span>
-                    <span id="capture-name" class="info-value"></span>
-                </div>
-                <div class="info-row">
-                    <span class="info-label">Employee ID:</span>
-                    <span id="capture-employee-id" class="info-value"></span>
-                </div>
-                <div class="info-row">
-                    <span class="info-label">Action:</span>
-                    <span id="capture-action" class="info-value"></span>
-                </div>
-                <div class="info-row">
-                    <span class="info-label">Confidence:</span>
-                    <span id="capture-confidence" class="info-value"></span>
+            <div class="recent-captures-list" id="recent-captures-list">
+                <div class="empty-captures">
+                    <p>No captures yet</p>
                 </div>
             </div>
         </div>

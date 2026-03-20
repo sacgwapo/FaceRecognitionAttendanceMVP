@@ -1,6 +1,8 @@
 let stream = null;
 let reconnectAttempts = 0;
 let isProcessing = false;
+let recentCaptures = [];
+let currentAction = 'time_in';
 
 const video = document.getElementById('video');
 const canvas = document.getElementById('canvas');
@@ -13,9 +15,11 @@ const overlayIcon = document.getElementById('overlay-icon');
 const overlayMessage = document.getElementById('overlay-message');
 const overlayDetails = document.getElementById('overlay-details');
 const livenessIndicator = document.getElementById('liveness-indicator');
+const nameOverlay = document.getElementById('name-overlay');
 
 const MAX_RECONNECT_ATTEMPTS = 5;
 const LIVENESS_CHECK_ENABLED = false;
+const MAX_RECENT_CAPTURES = 10;
 
 async function getCameras() {
     if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) {
@@ -204,7 +208,6 @@ async function performRecognition() {
 
     isProcessing = true;
     captureBtn.disabled = true;
-    captureBtn.textContent = 'Processing...';
 
     try {
         if (LIVENESS_CHECK_ENABLED) {
@@ -225,11 +228,10 @@ async function performRecognition() {
         ctx.drawImage(video, 0, 0);
 
         const imageBlob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.9));
-        const action = document.querySelector('input[name="action"]:checked').value;
 
         const formData = new FormData();
         formData.append('face_image', imageBlob, `snapshot_${Date.now()}.jpg`);
-        formData.append('action', action);
+        formData.append('action', currentAction);
 
         const response = await fetch('/api/recognition/identify', {
             method: 'POST',
@@ -237,7 +239,7 @@ async function performRecognition() {
         });
 
         const result = await response.json();
-        displayRecognitionResult(result, action);
+        displayRecognitionResult(result, currentAction);
 
     } catch (error) {
         console.error('Recognition error:', error);
@@ -245,13 +247,6 @@ async function performRecognition() {
     } finally {
         isProcessing = false;
         captureBtn.disabled = false;
-        captureBtn.innerHTML = `
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <circle cx="12" cy="12" r="10"></circle>
-                <circle cx="12" cy="12" r="3"></circle>
-            </svg>
-            Capture & Recognize
-        `;
     }
 }
 
@@ -311,7 +306,11 @@ function displayRecognitionResult(result, action) {
             'success'
         );
         showToast(`${result.name} - ${actionLabel} recorded`, 'success');
-        captureScreenshot(result, action, confidence);
+
+        if (nameOverlay) {
+            nameOverlay.textContent = `NAME: ${result.name}`;
+            nameOverlay.style.display = 'block';
+        }
     } else {
         const confidence = (result.confidence * 100).toFixed(1);
         showOverlay(
@@ -320,49 +319,81 @@ function displayRecognitionResult(result, action) {
             'error'
         );
         showToast('Face not recognized', 'error');
-        captureScreenshot(result, action, confidence);
+
+        if (nameOverlay) {
+            nameOverlay.style.display = 'none';
+        }
     }
+
+    addRecentCapture(result, action);
 
     setTimeout(() => {
         hideOverlay();
+        if (nameOverlay) {
+            nameOverlay.style.display = 'none';
+        }
     }, 4000);
 }
 
-function captureScreenshot(result, action, confidence) {
+function addRecentCapture(result, action) {
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
     const ctx = canvas.getContext('2d');
     ctx.drawImage(video, 0, 0);
 
-    const screenshotUrl = canvas.toDataURL('image/jpeg', 0.85);
-
-    const screenshotDisplay = document.getElementById('screenshot-display');
-    const captureTime = document.getElementById('capture-time');
-    const captureInfo = document.getElementById('capture-info');
-    const captureName = document.getElementById('capture-name');
-    const captureEmployeeId = document.getElementById('capture-employee-id');
-    const captureAction = document.getElementById('capture-action');
-    const captureConfidence = document.getElementById('capture-confidence');
-
-    screenshotDisplay.innerHTML = `<img src="${screenshotUrl}" alt="Captured Face">`;
-
+    const screenshotUrl = canvas.toDataURL('image/jpeg', 0.7);
     const now = new Date();
-    captureTime.textContent = now.toLocaleTimeString('en-US', {
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-        hour12: false
-    });
+    const confidence = (result.confidence * 100).toFixed(1);
 
-    const actionLabel = action === 'time_in' ? 'Time In' : 'Time Out';
-    const actionClass = action === 'time_in' ? 'time-in' : 'time-out';
+    const capture = {
+        id: Date.now(),
+        name: result.name || 'Unrecognized',
+        recognized: result.recognized,
+        action: action,
+        time: now.toLocaleTimeString('en-US', {
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: false
+        }),
+        confidence: confidence,
+        image: screenshotUrl
+    };
 
-    captureName.textContent = result.name || 'Unrecognized';
-    captureEmployeeId.textContent = result.employee_id || 'N/A';
-    captureAction.innerHTML = `<span class="action-badge ${actionClass}">${actionLabel}</span>`;
-    captureConfidence.innerHTML = `<span class="confidence-badge ${result.recognized ? 'high' : 'low'}">${confidence}%</span>`;
+    recentCaptures.unshift(capture);
 
-    captureInfo.style.display = 'block';
+    if (recentCaptures.length > MAX_RECENT_CAPTURES) {
+        recentCaptures = recentCaptures.slice(0, MAX_RECENT_CAPTURES);
+    }
+
+    updateRecentCapturesList();
+}
+
+function updateRecentCapturesList() {
+    const capturesList = document.getElementById('recent-captures-list');
+
+    if (recentCaptures.length === 0) {
+        capturesList.innerHTML = '<div class="empty-captures"><p>No captures yet</p></div>';
+        return;
+    }
+
+    capturesList.innerHTML = recentCaptures.map((capture, index) => `
+        <div class="capture-item">
+            <div class="capture-item-avatar">
+                <img src="${capture.image}" alt="${capture.name}">
+            </div>
+            <div class="capture-item-content">
+                <div class="capture-item-title">CAPTURE ${index + 1}:</div>
+                <div class="capture-item-name ${capture.recognized ? '' : 'unrecognized'}">
+                    ${capture.recognized ? 'Recognized: ' + capture.name : 'Unrecognized'}
+                </div>
+                <div class="capture-item-time">Time: ${capture.time}</div>
+                <span class="capture-item-badge ${capture.recognized ? 'recognized' : 'unrecognized'}">
+                    ${capture.recognized ? 'RECOGNIZED' : 'UNRECOGNIZED'}
+                </span>
+            </div>
+        </div>
+    `).join('');
 }
 
 function showOverlay(message, details, type = 'info') {
@@ -433,6 +464,14 @@ toggleBtn.addEventListener('click', () => {
 
 captureBtn.addEventListener('click', () => {
     performRecognition();
+});
+
+document.querySelectorAll('.time-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+        document.querySelectorAll('.time-btn').forEach(b => b.classList.remove('active'));
+        e.currentTarget.classList.add('active');
+        currentAction = e.currentTarget.dataset.action;
+    });
 });
 
 document.addEventListener('DOMContentLoaded', () => {
